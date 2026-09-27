@@ -1,8 +1,90 @@
-﻿export const STORAGE={ruangan:'gym_master_ruangan',device:'gym_master_device',unit:'gym_master_unit_bisnis',layanan:'gym_master_layanan',paket:'gym_master_paket',club:'gym_master_club',pegawai:'gym_master_pegawai'};
-export const read=(key)=>{try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[]}catch{return[]}};
-export const write=(key,value)=>localStorage.setItem(key,JSON.stringify(value));
-export const uid=()=>globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random().toString(36).slice(2)}`;
-export const nextCode=(prefix,items)=>{const nums=items.map(x=>Number(String(x.code||'').match(/(\d+)$/)?.[1]||0));return `${prefix}-${String(Math.max(0,...nums)+1).padStart(3,'0')}`};
-const seedData={club:[{id:'club-1',name:'Jakarta Central',status:'Aktif'},{id:'club-2',name:'Bandung Point',status:'Aktif'},{id:'club-3',name:'Surabaya Club',status:'Nonaktif'}],pegawai:[{id:'staff-1',name:'Andi Pratama',clubId:'club-1',status:'Aktif'},{id:'staff-2',name:'Sinta Dewi',clubId:'club-1',status:'Nonaktif'},{id:'staff-3',name:'Raka Putra',clubId:'club-2',status:'Aktif'}],unit:[{id:'unit-1',code:'UB-001',name:'Fitness',status:'Aktif'},{id:'unit-2',code:'UB-002',name:'Group Class',status:'Aktif'}],ruangan:[{id:'room-1',code:'R-001',name:'Main Gym',access:['Turnstile'],clubId:'club-1',status:'Aktif',scanQR:false,groupAccess:false,standby:{activeServiceId:'',membersInside:0}},{id:'room-2',code:'R-002',name:'Studio A',access:['Manual'],clubId:'club-1',status:'Aktif',scanQR:true,groupAccess:false,standby:{activeServiceId:'',membersInside:0}}],device:[{id:'device-1',code:'D-001',name:'Front Gate',type:'Turnstile',model:'GatePro X1',clubId:'club-1',roomId:'room-1',status:'Aktif',connection:'Online',readers:[{id:'reader-1',name:'QR Reader',method:'QR',direction:'Masuk',model:'QScan',sn:'SN-SEED-001',mode:'Via Controller',ip:'192.168.1.10',port:'8080',mac:'AA:BB:CC:DD:EE:01'}]}],layanan:[{id:'service-1',code:'L-001',name:'Open Gym',unitId:'unit-1',booking:'Tanpa Booking',roomIds:['room-1'],duration:'',capacity:'',instructor:false,staffActivation:false,picId:'',tolerances:{'club-1':10},description:'',status:'Aktif',transactionCount:0,activeMembers:0,activeSession:false,upcomingDate:''},{id:'service-2',code:'L-002',name:'Yoga Flow',unitId:'unit-2',booking:'Booking Member',roomIds:['room-2'],duration:'60',capacity:'20',instructor:true,staffActivation:false,picId:'',tolerances:{'club-1':5},description:'',status:'Aktif',transactionCount:1,activeMembers:2,activeSession:false,upcomingDate:''}],paket:[{id:'package-1',code:'PK-001',name:'Gym Basic',category:'Membership',kind:'Tunggal',group:'Yellow',holder:'Single',groupSize:'',clubs:['club-1'],price:500000,priceUnit:'Per Paket',activeValue:1,activeUnit:'Bulan',start:'Sejak Pembelian',channels:['POS','APK Member'],salesPeriod:'',addon:false,trial:false,description:'',details:[{id:'detail-1',serviceId:'service-1',quotaModel:'Unlimited',sessions:'',reset:'Tidak Reset',dailyLimit:'',allocation:500000,sharing:'Per Anggota'}],sold:1,activeMembers:1,status:'Aktif'}]};
-export function seed(){for(const [name,data] of Object.entries(seedData)){const key=STORAGE[name];if(localStorage.getItem(key)===null)write(key,data)}}
+export const STORAGE = {
+  ruangan: 'gym_master_ruangan',
+  device: 'gym_master_device',
+  unit: 'gym_master_unit_bisnis',
+  layanan: 'gym_master_layanan',
+  paket_membership: 'gym_master_paket_membership',
+  paket_kelas: 'gym_master_paket_kelas',
+  paket_trainer: 'gym_master_paket_trainer',
+  paket_recovery: 'gym_master_paket_recovery',
+  paket_pool: 'gym_master_paket_pool',
+  paket_bundling: 'gym_master_paket_bundling',
+  tarif_sewa: 'gym_master_tarif_sewa',
+  log_akses: 'gym_log_akses',
+  club: 'gym_master_club',
+  pegawai: 'gym_master_pegawai',
+  transaksi: 'gym_transaksi',
+  member: 'gym_member',
+  booking_sewa: 'gym_booking_sewa'
+};
 
+export const read = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+};
+
+export const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
+
+export const uid = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+export const nextCode = (prefix, items) => {
+  const nums = items.map(x => Number(String(x.code || '').match(/(\d+)$/)?.[1] || 0));
+  return `${prefix}-${String(Math.max(0, ...nums) + 1).padStart(4, '0')}`;
+};
+
+const seedData = {
+  club: [
+    { id: 'club-1', name: 'Jakarta Central', status: 'Aktif' },
+    { id: 'club-2', name: 'Bandung Point', status: 'Aktif' }
+  ],
+  pegawai: [
+    { id: 'staff-1', name: 'Andi Pratama', clubId: 'club-1', status: 'Aktif' }
+  ],
+  unit: [
+    { id: 'unit-1', code: 'UB-0001', name: 'Fitness', status: 'Aktif' },
+    { id: 'unit-2', code: 'UB-0002', name: 'Group Class', status: 'Aktif' }
+  ],
+  ruangan: [
+    { 
+      id: 'room-1', code: 'RNG-0001', name: 'Main Gym', access: ['Turnstile'], 
+      clubId: 'club-1', status: 'Aktif', capacity: 100, 
+      groupAccess: false, staffActivation: false 
+    },
+    { 
+      id: 'room-2', code: 'RNG-0002', name: 'Studio A', access: ['Booking + Lampu'], 
+      clubId: 'club-1', status: 'Aktif', capacity: 20, 
+      groupAccess: false, staffActivation: false 
+    }
+  ],
+  device: [
+    { 
+      id: 'dev-1', code: 'DEV-001', name: 'Gate Utama', type: 'Turnstile', model: 'GPro 1', 
+      clubId: 'club-1', roomId: 'room-1', status: 'Aktif', connection: 'Online', 
+      readers: [
+        { id: 'rdr-1', name: 'Scanner 1', method: 'QR', direction: 'Masuk', model: 'QRX', sn: 'SN-001', mode: 'Langsung' }
+      ] 
+    }
+  ],
+  paket_membership: [],
+  paket_kelas: [],
+  paket_trainer: [],
+  paket_recovery: [],
+  paket_pool: [],
+  paket_bundling: [],
+  tarif_sewa: [],
+  log_akses: [],
+  transaksi: [],
+  member: [{ id: 'mem-1', code: 'MBR-001', name: 'Budi Santoso', phone: '081234567', balances: [{ id: 'b-1', type: 'gym', name: 'Open Gym', qty: 'Unlimited', expiry: '2026-12-31' }] }],
+  booking_sewa: []
+};
+
+export function seed() {
+  for (const [name, data] of Object.entries(seedData)) {
+    const key = STORAGE[name];
+    if (localStorage.getItem(key) === null) write(key, data);
+  }
+}

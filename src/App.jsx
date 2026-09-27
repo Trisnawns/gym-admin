@@ -1,39 +1,1499 @@
-import React,{useEffect,useMemo,useState}from'react';import{Activity,Briefcase,Check,ChevronDown,ChevronLeft,ChevronRight,Copy,DoorOpen,Eye,Filter,Layers,Plus,Search,SlidersHorizontal,Trash2,X,Pencil,Cpu,Package as PackageIcon,Dumbbell}from'lucide-react';import{read,write,STORAGE,seed,uid,nextCode}from'./services/storage';import MultiSelect from './components/MultiSelect.jsx';
-const ACCESS=['Turnstile','Sliding Door','Excel Door Lock','Wristband','Manual'],BOOKING=['Tanpa Booking','Booking Member','Dijadwalkan Staff','Sewa Fasilitas'],STATUS=['Aktif','Nonaktif'];
-const SCHEMA={ruangan:{title:'Ruangan',icon:DoorOpen,prefix:'R',columns:[['code','Kode Ruangan'],['name','Nama Ruangan'],['access','Akses'],['clubId','Club'],['status','Status']],filter:[['code','Kode Ruangan'],['name','Nama Ruangan'],['access','Akses'],['clubId','Club'],['status','Status']]},device:{title:'Device',icon:Cpu,prefix:'D',columns:[['code','Kode Device'],['name','Nama Device'],['type','Jenis Device'],['model','Merk/Model'],['clubId','Club'],['roomId','Ruangan'],['status','Status'],['connection','Status Koneksi']],filter:[['code','Kode Device'],['name','Nama Device'],['type','Jenis Device'],['model','Merk/Model'],['clubId','Club'],['roomId','Ruangan'],['status','Status'],['connection','Status Koneksi']]},unit:{title:'Unit Bisnis',icon:Briefcase,prefix:'UB',columns:[['code','Kode Unit Bisnis'],['name','Nama Unit Bisnis'],['status','Status']],filter:[['code','Kode Unit Bisnis'],['name','Nama Unit Bisnis'],['status','Status']]},layanan:{title:'Layanan',icon:Layers,prefix:'L',columns:[['code','Kode Layanan'],['name','Nama Layanan'],['booking','Metode Booking'],['unitId','Unit Bisnis'],['roomIds','Ruangan - Club'],['status','Status']],filter:[['code','Kode Layanan'],['name','Nama Layanan'],['booking','Metode Booking'],['unitId','Unit Bisnis'],['roomIds','Ruangan - Club'],['status','Status']]},paket:{title:'Paket',icon:PackageIcon,prefix:'PK',columns:[['code','Kode Paket'],['name','Nama Paket'],['category','Kategori'],['kind','Jenis Paket'],['group','Grup'],['holder','Tipe Pemegang'],['details','Isi Layanan'],['price','Harga'],['activeValue','Masa Aktif'],['clubs','Club Berlaku'],['status','Status']],filter:[['code','Kode Paket'],['name','Nama Paket'],['category','Kategori'],['kind','Jenis Paket'],['group','Grup'],['holder','Tipe Pemegang'],['details','Layanan'],['unitId','Unit Bisnis'],['clubs','Club'],['priceMin','Harga Min'],['priceMax','Harga Max'],['status','Status']]}};
-const ALL=(m,k)=>read(STORAGE[m]||STORAGE[k]);const text=(obj,k)=>{const clubs=ALL('club');if(k==='clubId'||k==='clubs')return(Array.isArray(obj[k])?obj[k]:[obj[k]]).map(id=>clubs.find(c=>c.id===id)?.name||'').filter(Boolean).join(', ');if(k==='unitId'){if(obj.unitId)return ALL('unit').find(x=>x.id===obj.unitId)?.name||'';return(obj.details||[]).map(d=>{const svc=ALL('layanan').find(x=>x.id===d.serviceId);return ALL('unit').find(u=>u.id===svc?.unitId)?.name||''}).join(', ')}if(k==='priceMin'||k==='priceMax')return String(obj.price??'');if(k==='roomId')return ALL('ruangan').find(x=>x.id===obj[k])?.name||'';if(k==='roomIds')return(obj.roomIds||[]).map(id=>{const r=ALL('ruangan').find(y=>y.id===id);return r?`${r.name} - ${clubs.find(c=>c.id===r.clubId)?.name||''}`:''}).filter(Boolean).join(', ');if(k==='access')return(obj.access||[]).join(', ');if(k==='details')return(obj.details||[]).map(d=>ALL('layanan').find(s=>s.id===d.serviceId)?.name||'').join(', ');if(k==='price')return`Rp ${Number(obj.price||0).toLocaleString('id-ID')}`;if(k==='activeValue')return`${obj.activeValue||''} ${obj.activeUnit||''}`;return obj[k]??''};
-function DataTable({columns,rows,onSort,sort,actions}){return <div className="table-scroll"><table><thead><tr><th className="action-head">Aksi</th>{columns.map(([key,label])=><th key={key}><div className="th-wrap"><span>{label}</span><div className="sort-arrows"><button className={sort.key===key&&sort.dir===1?'active':''} onClick={()=>onSort(key,1)}>▲</button><button className={sort.key===key&&sort.dir===-1?'active':''} onClick={()=>onSort(key,-1)}>▼</button></div></div></th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.id}><td className="action-cell"><div className="action-list"><button title="View" className="view-action" onClick={()=>actions.view(row)}><Eye size={15}/></button><button title="Edit" className="edit-action" onClick={()=>actions.edit(row)}><Pencil size={15}/></button><button title="Delete" className="delete-action" onClick={()=>actions.remove(row)}><Trash2 size={15}/></button></div></td>{columns.map(([key])=><td key={key}>{key==='status'?<span className={`badge ${row.status==='Aktif'?'green':'muted'}`}>{row.status}</span>:key==='connection'?<span className={`badge ${row.connection==='Online'?'green':'red'}`}>{row.connection}</span>:<span className={key==='code'?'code':''}>{text(row,key)||(key==='details'?'—':'—')}</span>}</td>)}</tr>)}</tbody></table>{!rows.length&&<div className="empty"><Activity size={27}/><b>Tidak ada data ditemukan</b><span>Ubah pencarian atau filter Anda.</span></div>}</div>}
-function App(){const[tab,setTab]=useState('ruangan'),[rows,setRows]=useState([]),[query,setQuery]=useState(''),[filters,setFilters]=useState({}),[filterOpen,setFilterOpen]=useState(false),[sort,setSort]=useState({key:'name',dir:1}),[page,setPage]=useState(1),[perPage,setPerPage]=useState(8),[editor,setEditor]=useState(null),[modal,setModal]=useState(null),[toast,setToast]=useState('');useEffect(()=>{seed();load()},[]);useEffect(()=>{load();setPage(1);setQuery('');setFilters({})},[tab]);const load=()=>setRows(read(STORAGE[tab]));const tell=(message)=>{setToast(message);window.clearTimeout(window.__toast);window.__toast=window.setTimeout(()=>setToast(''),4200)};const module=SCHEMA[tab];const filtered=useMemo(()=>{let list=[...rows].filter(item=>module.columns.some(([key])=>String(text(item,key)).toLowerCase().includes(query.toLowerCase())));list=list.filter(item=>Object.entries(filters).every(([key,value])=>{if(!value)return true;if(key==='priceMin')return Number(item.price)>=Number(value);if(key==='priceMax')return Number(item.price)<=Number(value);return String(text(item,key)).toLowerCase().includes(value.toLowerCase())}));list.sort((a,b)=>String(text(a,sort.key)).localeCompare(String(text(b,sort.key)),'id',{numeric:true,sensitivity:'base'})*sort.dir);return list},[rows,query,filters,sort,tab]);const pageCount=Math.max(1,Math.ceil(filtered.length/perPage));const shown=filtered.slice((page-1)*perPage,page*perPage);const changeTab=(key)=>{setTab(key);setSort({key:'name',dir:1})};const launch=(item)=>setEditor({item:item?structuredClone(item):newItem(tab),duplicate:!!item?.__duplicate});function newItem(key){return{id:'',status:'Aktif',connection:'Offline',access:[],roomIds:[],clubs:[],channels:[],details:[],readers:[],tolerances:{},standby:{activeServiceId:'',membersInside:0},sold:0,activeMembers:0}};
-function save(item){let values=read(STORAGE[tab]);if(tab==='ruangan'){if(!item.name?.trim()||!item.access?.length||!item.clubId)return tell('Nama Ruangan, Akses, dan Club wajib diisi.');if(values.some(x=>x.id!==item.id&&x.name.trim().toLowerCase()===item.name.trim().toLowerCase()))return tell('Nama Ruangan sudah digunakan.')}if(tab==='device'){if(!item.name?.trim()||!item.type||!item.clubId||!item.roomId)return tell('Lengkapi field wajib Device.');for(const r of item.readers||[]){if(!r.name||!r.method||!r.direction||!r.sn)return tell('Lengkapi field wajib Reader.');const duplicate=values.filter(x=>x.id!==item.id).flatMap(d=>(d.readers||[]).map(rd=>({...rd,deviceName:d.name}))).find(rd=>rd.sn===r.sn);if(duplicate)return tell(`Serial Number sudah terdaftar pada ${duplicate.name} - ${duplicate.deviceName}`);const dupeInForm=(item.readers||[]).filter(x=>x.sn===r.sn);if(dupeInForm.length>1)return tell(`Serial Number sudah terdaftar pada ${r.name}`);if(r.mac&&!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(r.mac))return tell('MAC Address harus menggunakan format XX:XX:XX:XX:XX:XX.')}}if(tab==='unit'&&!item.name?.trim())return tell('Nama Unit Bisnis wajib diisi.');if(tab==='layanan'){if(!item.name?.trim()||!item.unitId||!item.booking)return tell('Nama Layanan, Unit Bisnis, dan Metode Booking wajib diisi.');if(!item.roomIds?.length)return tell('Pilih minimal satu ruangan.');if(['Booking Member','Dijadwalkan Staff','Sewa Fasilitas'].includes(item.booking)&&!item.duration)return tell('Durasi wajib diisi.');if(item.booking==='Sewa Fasilitas'&&!item.durationMultiple)return tell('Kelipatan Durasi wajib diisi.');if(item.staffActivation&&!item.picId)return tell('PIC Aktivasi wajib dipilih.')}if(tab==='paket'){if(!item.name?.trim()||!item.category||!item.kind||!item.holder||!item.clubs?.length||!item.activeValue||!item.activeUnit||!item.start)return tell('Lengkapi field wajib Paket.');if(!item.trial&&Number(item.price)<=0)return tell('Harga wajib lebih dari 0 kecuali untuk Paket Free Trial.');if(group&&(!item.groupSize||!item.priceUnit))return tell('Jumlah Anggota Group dan Satuan Harga wajib diisi.');if(item.kind==='Tunggal'&&item.details.length!==1)return tell('Paket Tunggal hanya dapat berisi 1 layanan.');if(item.kind==='Bundling'&&item.details.length<2)return tell('Paket Bundling minimal 2 layanan.');if(item.details.length>2)return tell('Isi layanan maksimal 2 layanan.');if(new Set(item.details.map(d=>d.serviceId)).size!==item.details.length)return tell('Satu layanan tidak boleh muncul dua kali dalam satu paket.');const total=item.details.reduce((n,d)=>n+Number(d.allocation||0),0);if(total!==Number(item.price||0))return tell(`Total alokasi (Rp ${total.toLocaleString('id-ID')}) tidak sama dengan harga paket (Rp ${Number(item.price||0).toLocaleString('id-ID')})`);for(const detail of item.details){const svc=ALL('layanan').find(s=>s.id===detail.serviceId);if(!svc)return tell('Pilih layanan yang valid.');if(item.category==='Paket Trainer'&&svc.booking!=='Dijadwalkan Staff')return tell('Paket Trainer hanya dapat berisi layanan Dijadwalkan Staff.');if(svc.booking==='Sewa Fasilitas'||svc.status!=='Aktif')return tell('Layanan yang dipilih tidak tersedia.');const clubMissing=(item.clubs||[]).find(cid=>!(svc.roomIds||[]).some(rid=>ALL('ruangan').find(r=>r.id===rid)?.clubId===cid));if(clubMissing)return tell(`${svc.name} tidak memiliki ruangan di ${ALL('club').find(c=>c.id===clubMissing)?.name||'club tersebut'}`);if(detail.quotaModel==='Sesi'&&!detail.sessions)return tell('Jumlah Sesi wajib diisi untuk model kuota Sesi.');if(detail.reset==='Bulanan'&&item.activeUnit!=='Bulan')return tell(`Reset kuota Bulanan tidak dapat digunakan untuk masa aktif ${item.activeValue} ${item.activeUnit}`);if(detail.reset==='Mingguan'&&['Hari'].includes(item.activeUnit)&&Number(item.activeValue)<7)return tell(`Reset kuota Mingguan tidak dapat digunakan untuk masa aktif ${item.activeValue} ${item.activeUnit}`);if(detail.sharing==='Bersama'&&Number(item.groupSize)>Number(svc.capacity||Infinity))return setModal({type:'warning',message:`Kapasitas ${svc.name} hanya ${svc.capacity} orang per sesi, lanjutkan?`,confirm:()=>commit(item,values)});}}commit(item,values)}
-function commit(item,values){const existing=values.find(x=>x.id===item.id);if(existing)values=values.map(x=>x.id===item.id?item:x);else{item={...item,id:uid(),code:nextCode(module.prefix,values)};values=[...values,item]}write(STORAGE[tab],values);setEditor(null);setModal(null);load();tell('Data berhasil disimpan.')}
-function remove(item){if(tab==='ruangan'){const linked=ALL('layanan').find(s=>s.roomIds?.includes(item.id));if(linked)return tell(`${item.name} telah berelasi dengan ${linked.name}, ruangan tidak dapat dihapus`);const count=ALL('device').filter(d=>d.roomId===item.id).length;if(count)return tell(`${item.name} memiliki ${count} device terpasang, ruangan tidak dapat dihapus`)}if(tab==='device'){const room=ALL('ruangan').find(r=>r.id===item.roomId);if(room)return tell(`${item.name} telah berelasi dengan ${room.name}, device tidak dapat dihapus`)}if(tab==='unit'){const service=ALL('layanan').find(s=>s.unitId===item.id);if(service)return tell(`${item.name} telah berelasi dengan ${service.name}, unit bisnis tidak dapat dihapus`)}if(tab==='layanan'&&item.transactionCount>0)return tell(`${item.name} telah berelasi dengan transaksi, ${item.name} tidak dapat dihapus`);if(tab==='paket'&&item.sold>0)return tell('Paket yang sudah terjual tidak dapat dihapus.');setModal({type:'confirm',message:`Hapus ${item.name}?`,confirm:()=>{write(STORAGE[tab],read(STORAGE[tab]).filter(x=>x.id!==item.id));setModal(null);load();tell('Data berhasil dihapus.')}})}
-const actions={view:item=>setModal({type:'view',item}),edit:launch,remove};
-return <div className="app-shell"><aside className="sidebar"><div className="brand"><span className="brand-mark"><Dumbbell size={19}/></span><span>GYMFLOW<small>MANAGEMENT</small></span></div><div className="nav-caption">WORKSPACE</div>{Object.entries(SCHEMA).map(([key,item])=><button className={`nav-item ${tab===key?'active':''}`} key={key} onClick={()=>changeTab(key)}><item.icon size={17}/><span>{item.title}</span>{tab===key&&<span className="nav-selected"></span>}</button>)}<div className="account"><div className="avatar">ZA</div><div><b>Admin Gym</b><small>Administrator</small></div><span className="presence"/></div></aside><main className="main"><header className="topbar"><div>Workspace <span>/</span> Master Data <span>/</span> <b>{module.title}</b></div><div className="profile"><span>Thursday, 24 September 2026</span><div className="avatar mini">ZA</div></div></header><div className="content"><div className="page-heading"><div><div className="eyebrow">MASTER DATA</div><h1>{module.title}</h1><p>Kelola data {module.title.toLowerCase()} gym Anda.</p></div><button className="primary" onClick={()=>launch()}><Plus size={16}/>Tambah {module.title}</button></div><section className="panel"><div className="panel-heading"><div><h2>Daftar {module.title}</h2><p>{filtered.length} data terdaftar</p></div><div className="toolbar"><div className="search-box"><Search size={16}/><input value={query} placeholder={`Cari ${module.title.toLowerCase()}...`} onChange={e=>{setQuery(e.target.value);setPage(1)}}/><kbd>⌘ K</kbd></div><button className={`secondary ${filterOpen?'selected':''}`} onClick={()=>setFilterOpen(!filterOpen)}><SlidersHorizontal size={15}/> Filter</button><button className="reset-icon" title="Reset filter" onClick={()=>{setFilters({});setQuery('');setPage(1)}}><X size={16}/></button></div></div>{filterOpen&&<div className="filter-panel">{module.filter.map(([key,label])=><label key={key}>{label}<input value={filters[key]||''} placeholder={`Filter ${label}`} onChange={e=>{setFilters({...filters,[key]:e.target.value});setPage(1)}}/></label>)}<button className="link-button" onClick={()=>{setFilters({});setQuery('');setPage(1)}}>Reset</button></div>}<DataTable columns={module.columns} rows={shown} sort={sort} onSort={(key,dir)=>setSort({key,dir})} actions={actions}/><div className="pagination"><span>Menampilkan <b>{filtered.length?(page-1)*perPage+1:0}–{Math.min(page*perPage,filtered.length)}</b> dari <b>{filtered.length}</b> data</span><div><select value={perPage} onChange={e=>{setPerPage(+e.target.value);setPage(1)}}><option value="8">8 / halaman</option><option value="15">15 / halaman</option><option value="30">30 / halaman</option></select><button disabled={page===1} onClick={()=>setPage(page-1)}><ChevronLeft size={16}/></button><b>{page} / {pageCount}</b><button disabled={page===pageCount} onClick={()=>setPage(page+1)}><ChevronRight size={16}/></button></div></div></section><footer><span>✦</span> Data tersimpan secara lokal di browser Anda <small>GYMFLOW ADMIN · V1.0</small></footer></div></main>{editor&&<Editor module={tab} item={editor.item} onClose={()=>setEditor(null)} onSave={save} tell={tell} setModal={setModal}/ >}{modal&&<Modal value={modal} module={tab} close={()=>setModal(null)}/ >}{toast&&<div className="toast">{toast}</div>}</div>}
-function Editor({module:m,item,onClose,onSave,tell,setModal}){const[v,setV]=useState(()=>({...item,deactivate:['ruangan','unit','layanan','paket'].includes(m)&&item.status==='Nonaktif'})),[section,setSection]=useState('Informasi');const upd=(key,val)=>setV(old=>({...old,[key]:val}));const clubs=ALL('club'),units=ALL('unit'),rooms=ALL('ruangan'),services=ALL('layanan'),staff=ALL('pegawai');const activeClubs=clubs.filter(c=>c.status==='Aktif'),availableRooms=rooms.filter(r=>r.status==='Aktif'&&clubs.find(c=>c.id===r.clubId)?.status==='Aktif'),activeServices=services.filter(s=>s.status==='Aktif'&&s.booking!=='Sewa Fasilitas'),soldLock=m==='paket'&&Number(v.sold)>0;const wasEdit=!!v.id;
-const field=(key,label,type='text',options=[],required=false,disabled=false)=>{const lock=disabled||(soldLock&&['category','kind','holder','activeValue','activeUnit','start'].includes(key));return <label className={key==='description'?'span-two':''} key={key}>{label}{required&&<i> *</i>}{type==='select'?<select disabled={lock} value={v[key]??''} onChange={e=>upd(key,e.target.value)}><option value="">Pilih {label}</option>{options.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select>:type==='multi'?<MultiSelect disabled={lock} value={v[key]||[]} options={options} onChange={value=>upd(key,value)}/>:type==='check'?<span className="check-field"><input disabled={lock} type="checkbox" checked={!!v[key]} onChange={e=>upd(key,e.target.checked)}/>{label}</span>:type==='textarea'?<textarea disabled={lock} value={v[key]||''} onChange={e=>upd(key,e.target.value)}/>:<input disabled={lock} type={type==='number'?'number':'text'} value={v[key]??''} onChange={e=>{const next=e.target.value;upd(key,next);if(m==='paket'&&key==='price'&&v.kind==='Tunggal'&&v.details?.length===1)upd('details',[{...v.details[0],allocation:Number(next||0)}])}}/>}</label>};
-const clubOptions=activeClubs.map(c=>[c.id,c.name]),roomOptions=availableRooms.map(r=>[r.id,`${r.name} - ${clubs.find(c=>c.id===r.clubId)?.name} - ${r.access.join(', ')}`]),serviceOptions=activeServices.map(s=>[s.id,`${s.name} - ${units.find(u=>u.id===s.unitId)?.name||''}`]),unitOptions=units.map(u=>[u.id,u.name]);
-function patchReader(index,key,value){const next=[...v.readers];next[index]={...next[index],[key]:value};upd('readers',next)}
-function submit(e){e.preventDefault();if(['ruangan','unit','layanan','paket'].includes(m))v.status=v.deactivate?'Nonaktif':'Aktif';if(m==='ruangan'&&v.status==='Nonaktif'&&wasEdit){const classService=services.find(s=>s.id===v.standby?.activeServiceId&&s.status==='Aktif');if(classService)return tell(`${classService.name} sedang berlangsung, ${v.name} tidak dapat dinonaktifkan`);if(Number(v.standby?.membersInside)>0)return tell('Masih ada member di dalam ruangan. Ruangan tidak dapat dinonaktifkan.')}
-if(m==='device'){const oldRoom=rooms.find(r=>r.id===item.roomId),newRoom=rooms.find(r=>r.id===v.roomId);if(wasEdit&&item.roomId!==v.roomId&&v.status!=='Maintenance')return tell(`Ubah status ${v.name} menjadi maintenance sebelum memindahkan ke ruangan lain`);if(v.status==='Aktif'&&newRoom?.status==='Nonaktif')return tell(`${newRoom.name} berstatus nonaktif, aktifkan ruangan terlebih dahulu`);if(v.status==='Nonaktif'){const svc=services.find(s=>s.status==='Aktif'&&s.activeSession&&s.roomIds?.includes(v.roomId));if(svc){const otherRoom=rooms.find(r=>r.id!==v.roomId&&r.clubId===v.clubId&&r.status==='Aktif'&&r.access.some(a=>!newRoom?.access.includes(a)));const otherMethod=otherRoom?.access.find(a=>!newRoom?.access.includes(a))||ACCESS.find(a=>!newRoom?.access.includes(a))||'Manual';setModal({type:'confirm',message:`${svc.name} sedang berlangsung di ${newRoom?.name}, akses peserta dialihkan ke ${otherMethod}, lanjutkan?`,confirm:()=>onSave(v)});return}}}
-if(m==='layanan'){const removed=(item.roomIds||[]).filter(id=>!(v.roomIds||[]).includes(id));if(removed.length&&item.upcomingDate){const needsRoom=removed.some(id=>{const old=rooms.find(r=>r.id===id);return !(v.roomIds||[]).some(newId=>rooms.find(r=>r.id===newId)?.clubId===old?.clubId)});if(needsRoom)return tell(`Terdapat jadwal ${v.name} pada ${item.upcomingDate}, tambahkan ruangan di club yang sama`)}if(v.status==='Nonaktif'&&Number(v.activeMembers)>0)return tell(`Terdapat member aktif pada ${v.name}, layanan tidak dapat dinonaktifkan`);if(v.status==='Nonaktif'&&v.activeSession)return tell(`Terdapat sesi aktif pada ${v.name}, layanan tidak dapat dinonaktifkan`)}
-if(m==='ruangan'){v.scanQR=(v.access||[]).includes('Manual')&&!!v.scanQR;v.groupAccess=(v.access||[]).includes('Excel Door Lock')&&!!v.groupAccess}onSave(v)}
-let body;
-if(m==='ruangan')body=<><div className="form-grid">{field('name','Nama Ruangan','text',[],true)}{field('access','Akses (pilih beberapa)','multi',ACCESS.map(x=>[x,x]),true)}{field('clubId','Club','select',clubOptions,true)}{v.access?.includes('Manual')&&field('scanQR','Scan QR Tanpa Approval','check')}{v.access?.includes('Excel Door Lock')&&field('groupAccess','Akses dengan rombongan','check')}{wasEdit&&<>{field('deactivate','Nonaktifkan Ruangan','check')}{null}</>}</div>{wasEdit&&<div className="simulation"><b>Simulasi Case Standby</b><p>Pilih data simulasi untuk menguji penolakan penonaktifan.</p><label>Layanan sedang berlangsung<select value={v.standby?.activeServiceId||''} onChange={e=>upd('standby',{...v.standby,activeServiceId:e.target.value})}><option value="">Tidak ada</option>{services.filter(s=>s.roomIds?.includes(v.id)).map(s=><option value={s.id}>{s.name}</option>)}</select></label><label>Member di dalam ruangan<input type="number" min="0" value={v.standby?.membersInside||0} onChange={e=>upd('standby',{...v.standby,membersInside:+e.target.value})}/></label></div>}</>;
-if(m==='device')body=<><div className="form-grid">{field('name','Nama Device','text',[],true)}{field('type','Jenis Device','select',['Turnstile','Sliding Door','Excel Door'].map(x=>[x,x]),true)}{field('model','Merk/Model')}{field('clubId','Club','select',clubOptions,true)}{field('roomId','Ruangan','select',rooms.filter(r=>r.clubId===v.clubId).map(r=>[r.id,r.name]),true)}{field('status','Status','select',['Aktif','Nonaktif','Maintenance'].map(x=>[x,x]),true)}{field('connection','Status Koneksi','select',['Online','Offline'].map(x=>[x,x]),false,true)}</div><div className="sub-heading"><div><h3>Reader</h3><p>Daftarkan reader yang terpasang pada device.</p></div><button type="button" className="secondary" onClick={()=>upd('readers',[...(v.readers||[]),{id:uid(),name:'',method:'QR',direction:'Masuk',model:'',sn:'',mode:'Via Controller',ip:'',port:'',mac:''}])}><Plus size={14}/>Tambah Reader</button></div>{(v.readers||[]).map((reader,index)=><div className="reader-block" key={reader.id}><div className="reader-title"><b>Reader {index+1}</b><button type="button" className="delete-action" onClick={()=>upd('readers',v.readers.filter((_,i)=>i!==index))}><Trash2 size={15}/></button></div><div className="form-grid compact">{[['name','Nama Reader','text'],['method','Metode','select',['QR','Face ID']],['direction','Arah','select',['Masuk','Keluar']],['model','Merk/Model','text'],['sn','SN','text'],['mode','Mode Koneksi','select',['Via Controller','Langsung']],['ip','IP','text'],['port','Port','text'],['mac','MAC Address','text']].map(([key,label,type,opts])=><label key={key}>{label}{type==='select'?<select value={reader[key]||''} onChange={e=>patchReader(index,key,e.target.value)}>{opts.map(x=><option>{x}</option>)}</select>:<input value={reader[key]||''} placeholder={key==='mac'?'XX:XX:XX:XX:XX:XX':''} onChange={e=>patchReader(index,key,e.target.value)}/>}</label>)}</div></div>)}</>;
-if(m==='unit')body=<div className="form-grid">{field('name','Nama Unit Bisnis','text',[],true)}{wasEdit&&field('status','Status','select',STATUS.map(x=>[x,x]))}</div>;
-if(m==='layanan'){const hasBooking=['Booking Member','Dijadwalkan Staff'].includes(v.booking);const showDuration=hasBooking||v.booking==='Sewa Fasilitas';const clubIds=[...new Set((v.roomIds||[]).map(id=>rooms.find(r=>r.id===id)?.clubId).filter(Boolean))];body=<><div className="form-grid">{field('name','Nama Layanan','text',[],true)}{field('unitId','Unit Bisnis','select',unitOptions,true)}{field('booking','Metode Booking','select',BOOKING.map(x=>[x,x]),true)}{field('roomIds','Ruangan - Club - Jenis Akses','multi',roomOptions,true)}{showDuration&&field('duration','Durasi (menit)','number',[],true)}{v.booking==='Sewa Fasilitas'&&field('durationMultiple','Kelipatan Durasi','number')}{hasBooking&&<>{field('capacity','Kapasitas per Sesi','number')}{field('instructor','Butuh Instruktur','check')}</>}{v.booking==='Tanpa Booking'&&field('staffActivation','Perlu Aktivasi Staff','check')}{v.staffActivation&&field('picId','PIC Aktivasi','select',staff.filter(p=>p.status==='Aktif'&&(v.roomIds||[]).some(id=>rooms.find(r=>r.id===id)?.clubId===p.clubId)).map(p=>[p.id,p.name]))}{field('description','Deskripsi','textarea')}{wasEdit&&field('deactivate','Nonaktifkan Layanan','check')}</div><div className="sub-heading"><div><h3>Toleransi Terlambat</h3><p>Club mengikuti pilihan ruangan.</p></div></div>{clubIds.map(cid=><div className="tolerance-row"><span>{clubs.find(c=>c.id===cid)?.name}</span><label>Menit toleransi<input type="number" value={v.tolerances?.[cid]||0} onChange={e=>upd('tolerances',{...v.tolerances,[cid]:+e.target.value})}/></label></div>)}{wasEdit&&<div className="simulation"><b>Simulasi Case Standby</b><p>Gunakan untuk menguji penghentian layanan.</p>{field('activeMembers','Member aktif','number')}{field('activeSession','Ada sesi aktif','check')}<label>Jadwal mendatang (tanggal terdekat)<input placeholder="contoh: 30 September 2026" value={v.upcomingDate||''} onChange={e=>upd('upcomingDate',e.target.value)}/></label></div>}</>}
-if(m==='paket'){const group=v.holder==='Group';const available=(v.details||[]).length<2&&(v.kind!=='Tunggal'||!(v.details||[]).length);const detailsLocked=soldLock;const updateDetail=(index,key,value)=>{const next=[...v.details];next[index]={...next[index],[key]:value};upd('details',next)};body=<><div className="form-grid">{field('name','Nama Paket','text',[],true)}{field('category','Kategori','select',['Membership','Paket Kelas','Paket Trainer'].map(x=>[x,x]),true)}{field('kind','Jenis Paket','select',['Tunggal','Bundling'].map(x=>[x,x]),true)}{field('group','Grup','select',['Yellow','Orange','Blue'].map(x=>[x,x]))}{field('holder','Tipe Pemegang','select',['Single','Couple','Group'].map(x=>[x,x]),true)}{group&&field('groupSize','Jumlah Anggota Group','number',[],true)}{field('clubs','Club Berlaku','multi',clubOptions,true)}{field('price','Harga','number',[],true)}{group&&field('priceUnit','Satuan Harga','select',['Per Paket','Per Orang'].map(x=>[x,x]))}{field('activeValue','Masa Aktif (angka)','number',[],true)}{field('activeUnit','Satuan Masa Aktif','select',['Hari','Minggu','Bulan'].map(x=>[x,x]))}{field('start','Mulai Aktif','select',['Sejak Pembelian','Sejak Kunjungan Pertama','Pilih Tanggal saat Transaksi'].map(x=>[x,x]))}{field('channels','Kanal Penjualan','multi',['POS','APK Member','Voucher B2B'].map(x=>[x,x]))}{field('salesPeriod','Periode Penjualan')}{field('addon','Hanya sebagai Add-on','check')}{field('trial','Paket Free Trial','check')}{field('description','Deskripsi','textarea')}{wasEdit&&field('deactivate','Nonaktifkan Paket','check')}</div><div className="sub-heading"><div><h3>Detail Layanan</h3><p>Akses paket ditentukan layanan yang dimasukkan di detail.</p></div><div>{available&&!soldLock&&<button type="button" className="secondary" onClick={()=>upd('details',[...v.details,{id:uid(),serviceId:'',quotaModel:'Unlimited',sessions:'',reset:'Tidak Reset',dailyLimit:'',sharing:group?'Per Anggota':'',allocation:v.kind==='Tunggal'?Number(v.price||0):0}])}><Plus size={14}/>Tambah Layanan</button>}<button type="button" className="link-button" disabled={soldLock} onClick={()=>setModal({type:'copy',items:ALL('paket').filter(p=>p.id!==v.id),choose:p=>upd('details',structuredClone(p.details||[]))})}>Salin dari Paket</button></div></div>{v.details.map((detail,index)=><div className="detail-block" key={detail.id}><button type="button" className="delete-action delete-detail" disabled={detailsLocked} onClick={()=>upd('details',v.details.filter((_,i)=>i!==index))}><Trash2 size={15}/></button><div className="form-grid compact">{<label>Layanan<select disabled={detailsLocked} value={detail.serviceId} onChange={e=>updateDetail(index,'serviceId',e.target.value)}><option value="">Pilih layanan</option>{serviceOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select></label>}<label>Model Kuota<select disabled={detailsLocked} value={detail.quotaModel} onChange={e=>updateDetail(index,'quotaModel',e.target.value)}><option>Unlimited</option><option>Sesi</option></select></label>{detail.quotaModel==='Sesi'&&<>{<label>Jumlah Sesi<input disabled={detailsLocked} type="number" value={detail.sessions} onChange={e=>updateDetail(index,'sessions',+e.target.value)}/></label>}<label>Reset Kuota<select disabled={detailsLocked} value={detail.reset} onChange={e=>updateDetail(index,'reset',e.target.value)}>{['Tidak Reset','Harian','Mingguan','Bulanan'].map(x=><option>{x}</option>)}</select></label></>}<label>Batas Pemakaian per Hari<input disabled={detailsLocked} type="number" value={detail.dailyLimit||''} onChange={e=>updateDetail(index,'dailyLimit',+e.target.value)}/></label>{group&&<label>Pembagian Kuota<select disabled={detailsLocked} value={detail.sharing} onChange={e=>updateDetail(index,'sharing',e.target.value)}><option>Per Anggota</option><option>Bersama</option></select></label>}<label>Alokasi Harga<input type="number" value={detail.allocation||0} readOnly={v.kind==='Tunggal'} onChange={e=>updateDetail(index,'allocation',+e.target.value)}/></label></div></div>)}{soldLock&&<p className="note">Paket terjual: kategori, jenis, pemegang, masa aktif, dan detail layanan dikunci. Alokasi dan harga tetap dapat diubah.</p>}</>}
-return <div className="overlay"><form className="editor" onSubmit={submit}><header className="editor-header"><div><div className="eyebrow">MASTER DATA / {SCHEMA[m].title.toUpperCase()}</div><h2>{wasEdit&&!item.__duplicate?'Edit':'Tambah'} {SCHEMA[m].title}</h2><p>{wasEdit?'Perbarui informasi data yang dipilih.':'Masukkan informasi untuk membuat data baru.'}</p></div><button type="button" className="close-button" onClick={onClose}><X size={20}/></button></header><div className="editor-body">{body}</div><footer className="editor-footer"><button type="button" className="secondary" onClick={onClose}>Batal</button><button className="primary"><Check size={15}/>Simpan</button></footer></form></div>}
-function Modal({value:m,module,close}){if(m.type==='view'){const item=m.item;return <div className="overlay"><div className="view-modal"><button className="close-button float-close" onClick={close}><X/></button><div className="eyebrow">DETAIL {SCHEMA[module].title.toUpperCase()}</div><h2>{item.name}</h2><div className="view-grid">{SCHEMA[module].columns.map(([key,label])=><div><small>{label}</small><b>{text(item,key)||'—'}</b></div>)}</div>{module==='ruangan'&&<><div className="view-grid"><div><small>Scan QR Tanpa Approval</small><b>{item.scanQR?'Ya':'Tidak'}</b></div><div><small>Akses dengan rombongan</small><b>{item.groupAccess?'Ya':'Tidak'}</b></div><div className="span-two"><small>Device terpasang</small><b>{ALL('device').filter(d=>d.roomId===item.id).map(d=>`${d.name} · ${d.type} · ${d.status}`).join(', ')||'Tidak ada'}</b></div></div></>}{module==='device'&&(item.readers||[]).map(r=><div className="view-sub"><b>{r.name}</b><span>{r.method} · {r.direction} · SN {r.sn}</span></div>)}{module==='paket'&&<><h3>Detail Layanan</h3>{(item.details||[]).map(d=><div className="view-sub"><b>{ALL('layanan').find(s=>s.id===d.serviceId)?.name||'—'}</b><span>{d.quotaModel} · Rp {Number(d.allocation||0).toLocaleString('id-ID')}</span></div>)}<p>Jumlah Terjual: {item.sold||0} · Member Aktif: {item.activeMembers||0}</p></>}<button className="primary full-width" onClick={close}>Tutup</button></div></div>}
-if(m.type==='copy')return <div className="overlay"><div className="view-modal"><button className="close-button float-close" onClick={close}><X/></button><div className="eyebrow">SALIN DARI PAKET</div><h2>Pilih paket sumber</h2>{m.items.map(p=><button className="copy-option" onClick={()=>{m.choose(p);close()}}><span>{p.name}</span><small>{p.code}</small></button>)}<button className="secondary full-width" onClick={close}>Batal</button></div></div>;
-return <div className="overlay"><div className="confirm-modal"><div className="warning-symbol">!</div><h2>{m.type==='warning'?'Periksa kapasitas':'Konfirmasi'}</h2><p>{m.message}</p><div className="modal-actions"><button className="secondary" onClick={close}>Tidak</button><button className="primary" onClick={m.confirm}>Ya</button></div></div></div>}
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { 
+  Activity, Briefcase, Check, ChevronLeft, ChevronRight, DoorOpen, 
+  Eye, Filter, Plus, Search, SlidersHorizontal, Trash2, X, Pencil, Cpu, 
+  Package as PackageIcon, Dumbbell, Clock, FileText, Layers,
+  ShoppingCart, Users, CalendarCheck
+} from 'lucide-react';
+import { read, write, STORAGE, seed, uid, nextCode } from './services/storage';
+import MultiSelect from './components/MultiSelect.jsx';
 
+// Auto-migrate old room codes in browser localStorage
+(function migrateOldCodes() {
+  try {
+    const rooms = JSON.parse(localStorage.getItem('gym_master_ruangan') || '[]');
+    let modified = false;
+    const updated = rooms.map(r => {
+      if (r.code && !r.code.startsWith('RNG-')) {
+        modified = true;
+        const numMatch = r.code.match(/\d+/);
+        const num = numMatch ? String(numMatch[0]).padStart(4, '0') : '0000';
+        return { ...r, code: `RNG-${num}` };
+      }
+      return r;
+    });
+    if (modified) localStorage.setItem('gym_master_ruangan', JSON.stringify(updated));
+
+    // Auto-migrate old unit bisnis codes in browser localStorage
+    let units = JSON.parse(localStorage.getItem('gym_master_unit_bisnis') || '[]');
+    let unitModified = false;
+    const unitUpdated = units.map(u => {
+      if (u.code && !u.code.match(/^UB-\d{4}$/)) {
+        unitModified = true;
+        const numMatch = u.code.match(/\d+/);
+        const num = numMatch ? String(numMatch[0]).padStart(4, '0') : '0000';
+        return { ...u, code: `UB-${num}` };
+      }
+      return u;
+    });
+    if (unitModified) {
+      localStorage.setItem('gym_master_unit_bisnis', JSON.stringify(unitUpdated));
+    }
+
+    // Auto-migrate old device codes in browser localStorage
+    let devices = JSON.parse(localStorage.getItem('gym_master_device') || '[]');
+    let devModified = false;
+    const devUpdated = devices.map(d => {
+      if (d.code && d.code.startsWith('D-') && !d.code.startsWith('DEV-')) {
+        devModified = true;
+        const numMatch = d.code.match(/\d+/);
+        const num = numMatch ? String(numMatch[0]).padStart(4, '0') : '0000';
+        return { ...d, code: `DEV-${num}` };
+      }
+      return d;
+    });
+    if (devModified) {
+      devices = devUpdated;
+      localStorage.setItem('gym_master_device', JSON.stringify(devUpdated));
+    }
+    if (devices.length <= 1) {
+      const dummyDevices = [
+        { id: 'dev-2', code: 'DEV-0002', name: 'Pintu Recovery', type: 'Sliding door', model: 'SD-100', clubId: 'club-1', roomId: 'room-2', status: 'Aktif', connection: 'Online', readers: [{ id: 'rdr-2', name: 'Scanner Face ID', method: 'Face ID', direction: 'Masuk', sn: 'SN-002' }] },
+        { id: 'dev-3', code: 'DEV-0003', name: 'Pintu Loker VIP', type: 'Excel Door', model: 'EDL-200', clubId: 'club-2', roomId: 'room-2', status: 'Aktif', connection: 'Offline', readers: [{ id: 'rdr-3', name: 'Scanner Gelang', method: 'QR', direction: 'Masuk', sn: 'SN-003' }] }
+      ];
+      const newDevices = dummyDevices.filter(d => !devices.some(existing => existing.id === d.id));
+      if (newDevices.length > 0) {
+        localStorage.setItem('gym_master_device', JSON.stringify([...devices, ...newDevices]));
+      }
+    }
+    
+    // Inject dummy booking & log_akses for Case Standby testing
+    let bookings = JSON.parse(localStorage.getItem('gym_booking_sewa') || '[]');
+    if (bookings.length === 0) {
+      localStorage.setItem('gym_booking_sewa', JSON.stringify([
+        { id: 'book-test', roomId: 'room-1', date: 'Hari Ini', startTime: '10:00', endTime: '12:00', renter: 'Budi (Test Standby)', status: 'Confirmed' }
+      ]));
+    }
+    
+    let logs = JSON.parse(localStorage.getItem('gym_log_akses') || '[]');
+    if (logs.length === 0) {
+      localStorage.setItem('gym_log_akses', JSON.stringify([
+        { id: 'log-test', roomId: 'room-2', memberName: 'Siti (Test Standby)', type: 'Masuk', time: '09:00' }
+      ]));
+    }
+    
+  } catch (e) {}
+})();
+
+const ACCESS = ['Turnstile', 'Sliding Door', 'Excel Door Lock', 'QR + Wristband', 'Booking + Lampu', 'Manual', 'Tanpa Gate'];
+const STATUS = ['Aktif', 'Nonaktif'];
+const DEVICE_TYPE = ['Turnstile', 'Sliding door', 'Excel Door'];
+const DEVICE_STATUS = ['Aktif', 'Nonaktif', 'Maintenance'];
+
+const SCHEMA = {
+  ruangan: {
+    title: 'Ruangan', icon: DoorOpen, prefix: 'RNG',
+    columns: [['code', 'Kode Ruangan'], ['name', 'Nama Ruangan'], ['clubId', 'Club'], ['access', 'Mekanisme Akses'], ['capacity', 'Kapasitas'], ['groupAccess', 'Satu Akses Rombongan'], ['staffActivation', 'Perlu Aktivasi Staf'], ['status', 'Status']],
+    filter: [['code', 'Kode Ruangan'], ['name', 'Nama Ruangan'], ['clubId', 'Club'], ['status', 'Status']]
+  },
+  device: {
+    title: 'Device', icon: Cpu, prefix: 'DEV',
+    columns: [['code', 'Kode Device'], ['name', 'Nama Device'], ['type', 'Jenis Device'], ['model', 'Merk/Model'], ['clubId', 'Club'], ['roomId', 'Ruangan'], ['status', 'Status'], ['connection', 'Koneksi']],
+    filter: [['code', 'Kode Device'], ['name', 'Nama Device'], ['type', 'Jenis Device'], ['model', 'Merk/Model'], ['clubId', 'Club'], ['roomId', 'Ruangan'], ['status', 'Status'], ['connection', 'Koneksi']]
+  },
+  unit: {
+    title: 'Unit Bisnis', icon: Briefcase, prefix: 'UB',
+    columns: [['code', 'Kode Unit Bisnis'], ['name', 'Nama Unit Bisnis'], ['status', 'Status']],
+    filter: [['code', 'Kode Unit Bisnis'], ['name', 'Nama Unit Bisnis'], ['status', 'Status']]
+  },
+  paket_membership: {
+    title: 'Membership', icon: PackageIcon, prefix: 'MB',
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['price', 'Harga'], ['activeValue', 'Masa Aktif'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+  },
+  paket_kelas: {
+    title: 'Paket Kelas', icon: PackageIcon, prefix: 'PK',
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['type', 'Tipe Paket'], ['quota', 'Kuota Sesi'], ['price', 'Harga'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+  },
+  paket_trainer: {
+    title: 'Paket Trainer', icon: PackageIcon, prefix: 'PT',
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['sessionType', 'Tipe Sesi'], ['price', 'Harga'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+  },
+  paket_recovery: {
+    title: 'Paket Recovery', icon: PackageIcon, prefix: 'PR',
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['recoveryType', 'Jenis'], ['roomId', 'Ruangan'], ['quota', 'Kuota Sesi'], ['activeValue', 'Masa Aktif'], ['price', 'Harga'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+  },
+  paket_pool: {
+    title: 'Paket Pool', icon: PackageIcon, prefix: 'PL',
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['roomId', 'Ruangan'], ['quota', 'Kuota Sesi'], ['reset', 'Reset'], ['activeValue', 'Masa Aktif'], ['price', 'Harga'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+  },
+  paket_bundling: {
+    title: 'Bundling', icon: Layers, prefix: 'BD',
+    columns: [['code', 'Kode Bundling'], ['name', 'Nama'], ['clubs', 'Club'], ['components', 'Isi Komponen'], ['holder', 'Tipe Pemegang'], ['price', 'Harga'], ['activeValue', 'Masa Aktif'], ['status', 'Status']],
+    filter: [['name', 'Nama'], ['status', 'Status']]
+  },
+  tarif_sewa: {
+    title: 'Tarif Sewa', icon: Clock, prefix: 'SW',
+    columns: [['roomId', 'Fasilitas'], ['day', 'Hari'], ['timeRange', 'Jam'], ['price', 'Tarif/Jam'], ['overtime', 'Toleransi'], ['status', 'Status']],
+    filter: []
+  },
+  log_akses: {
+    title: 'Log Akses', icon: FileText, prefix: 'LOG',
+    columns: [['time', 'Waktu'], ['member', 'Member/Staf'], ['roomId', 'Ruangan'], ['deviceId', 'Device'], ['method', 'Metode'], ['direction', 'Arah'], ['result', 'Hasil'], ['cut', 'Sesi Dipotong'], ['staff', 'Staf Pengaktif']],
+    filter: [['member', 'Member'], ['roomId', 'Ruangan']]
+  },
+  transaksi: {
+    title: 'Transaksi POS', icon: ShoppingCart, prefix: 'TRX',
+    columns: [['code', 'No. Transaksi'], ['date', 'Tanggal'], ['member', 'Member'], ['items', 'Produk'], ['total', 'Total'], ['paymentScheme', 'Skema Bayar'], ['status', 'Status']],
+    filter: [['code', 'No. Transaksi'], ['member', 'Member'], ['status', 'Status']]
+  },
+  member: {
+    title: 'Data & Saldo Member', icon: Users, prefix: 'MBR',
+    columns: [['code', 'ID Member'], ['name', 'Nama Lengkap'], ['phone', 'Telepon'], ['activeBalances', 'Total Saldo Aktif']],
+    filter: [['code', 'ID Member'], ['name', 'Nama'], ['phone', 'Telepon']]
+  },
+  booking_sewa: {
+    title: 'Booking Sewa', icon: CalendarCheck, prefix: 'BOK',
+    columns: [['code', 'No. Booking'], ['date', 'Tanggal'], ['time', 'Jam'], ['roomId', 'Fasilitas'], ['renter', 'Penyewa'], ['playersCount', 'Jml Pemain'], ['status', 'Status']],
+    filter: [['date', 'Tanggal'], ['roomId', 'Fasilitas'], ['renter', 'Penyewa'], ['status', 'Status']]
+  }
+};
+
+const ALL = (m, k) => read(STORAGE[m] || STORAGE[k]);
+
+const text = (obj, k) => {
+  if (k === 'clubId' || k === 'clubs') {
+    const clubs = ALL('club');
+    return (Array.isArray(obj[k]) ? obj[k] : [obj[k]]).map(id => clubs.find(c => c.id === id)?.name || '').filter(Boolean).join(', ');
+  }
+  if (k === 'roomId') return ALL('ruangan').find(x => x.id === obj[k])?.name || '';
+  if (k === 'access') return (obj.access || []).map(a => `[${a}]`).join(' ');
+  if (k === 'price' || k === 'total') return `Rp ${Number(obj[k] || 0).toLocaleString('id-ID')}`;
+  if (k === 'activeValue') return `${obj.activeValue || ''} ${obj.activeUnit || ''}`;
+  if (k === 'groupAccess' || k === 'staffActivation') return obj[k] ? 'Ya' : 'Tidak';
+  if (k === 'components') return obj.details?.length > 2 ? `${obj.details[0].name}, ${obj.details[1].name} +${obj.details.length - 2}` : (obj.details || []).map(d => d.name).join(', ');
+  if (k === 'activeBalances') return obj.balances ? `${obj.balances.length} Paket` : '0 Paket';
+  if (k === 'playersCount') return obj.players ? `${obj.players.length} Orang` : '0 Orang';
+  if (k === 'time') return `${obj.startTime || '00:00'} - ${obj.endTime || '00:00'}`;
+  return obj[k] ?? '';
+};
+
+function ChipOverflow({ items, max = 2 }) {
+  const [open, setOpen] = useState(false);
+  if (!items || items.length === 0) return <span style={{color:'#9CA3AF'}}>—</span>;
+  const visible = open ? items : items.slice(0, max);
+  const rest = items.length - max;
+  return (
+    <div className="chip-col">
+      {visible.map(a => (
+        <span className="chip chip-row" key={a}>{a}</span>
+      ))}
+      {!open && rest > 0 && (
+        <button className="chip-expand-btn" onClick={() => setOpen(true)}>
+          ...+{rest} lainnya
+        </button>
+      )}
+      {open && rest > 0 && (
+        <button className="chip-expand-btn" onClick={() => setOpen(false)}>
+          Sembunyikan
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DataTable({ columns, rows, onSort, sort, actions, moduleKey }) {
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th className="action-head" style={{ width: '1%', whiteSpace: 'nowrap' }}>Aksi</th>
+            {columns.map(([key, label]) => (
+              <th key={key}>
+                <div className="th-wrap">
+                  <span>{label}</span>
+                  <div className="sort-arrows">
+                    <button className={sort.key === key && sort.dir === 1 ? 'active' : ''} onClick={() => onSort(key, 1)}>▲</button>
+                    <button className={sort.key === key && sort.dir === -1 ? 'active' : ''} onClick={() => onSort(key, -1)}>▼</button>
+                  </div>
+                </div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(row => (
+            <tr key={row.id}>
+              <td className="action-cell">
+                <div className="action-list">
+                  <button title="View" className="view-action" onClick={() => actions.view(row)}><Eye size={15} /></button>
+                  {moduleKey !== 'log_akses' && <button title="Edit" className="edit-action" onClick={() => actions.edit(row)}><Pencil size={15} /></button>}
+                  {moduleKey !== 'log_akses' && <button title="Delete" className="delete-action" onClick={() => actions.remove(row)}><Trash2 size={15} /></button>}
+                </div>
+              </td>
+              {columns.map(([key]) => (
+                <td key={key}>
+                  {key === 'status' ? <span className={`badge ${row.status === 'Aktif' ? 'green' : 'muted'}`}>{row.status}</span>
+                  : key === 'connection' ? <span className={`badge ${row.connection === 'Online' ? 'green' : 'red'}`}>{row.connection}</span>
+                  : key === 'access' ? <ChipOverflow items={row.access} max={2} />
+                  : <span className={key === 'code' ? 'code' : ''}>{text(row, key) || '—'}</span>}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {!rows.length && (
+        <div className="empty">
+          <Activity size={27} />
+          <b>Tidak ada data ditemukan</b>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [tab, setTab] = useState('ruangan');
+  const [rows, setRows] = useState([]);
+  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState({});
+  const [pending, setPending] = useState({});
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sort, setSort] = useState({ key: 'code', dir: 1 });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
+  const [editor, setEditor] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => { seed(); load(); }, []);
+  useEffect(() => { load(); setPage(1); setQuery(''); setFilters({}); setPending({}); setSort({ key: SCHEMA[tab].columns.some(([k]) => k === 'code') ? 'code' : SCHEMA[tab].columns[0][0], dir: 1 }); }, [tab]);
+
+  const load = () => setRows(read(STORAGE[tab]));
+  const tell = (msg) => {
+    setToast(msg);
+    window.clearTimeout(window.__toast);
+    window.__toast = window.setTimeout(() => setToast(''), 4200);
+  };
+
+  const module = SCHEMA[tab];
+  const filtered = useMemo(() => {
+    let list = [...rows].filter(item => module.columns.some(([key]) => String(text(item, key)).toLowerCase().includes(query.toLowerCase())));
+    list = list.filter(item => Object.entries(filters).every(([key, value]) => {
+      if (!value) return true;
+      if (key === 'access') return (item.access || []).some(a => a === value);
+      if (key === 'clubId') return item.clubId === value;
+      if (key === 'status') return item.status === value;
+      return String(text(item, key)).toLowerCase().includes(value.toLowerCase());
+    }));
+    list.sort((a, b) => String(text(a, sort.key)).localeCompare(String(text(b, sort.key)), 'id', { numeric: true, sensitivity: 'base' }) * sort.dir);
+    return list;
+  }, [rows, query, filters, sort, tab]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const shown = filtered.slice((page - 1) * perPage, page * perPage);
+
+  const launch = (item) => setEditor({ item: item ? structuredClone(item) : newItem(tab) });
+
+  function newItem(key) {
+    if (key === 'device') {
+      return { id: '', access: [], clubs: [], details: [], readers: [], sold: 0, activeMembers: 0 };
+    }
+    return {
+      id: '', status: 'Aktif', connection: 'Offline', access: [], clubs: [], details: [], readers: [],
+      sold: 0, activeMembers: 0
+    };
+  }
+
+  function save(item) {
+    let values = read(STORAGE[tab]);
+    
+    if (tab === 'ruangan') {
+      if (!item.name || !item.clubId || !item.access?.length) return tell('Nama Ruangan, Club, dan Akses wajib diisi.');
+      if (item.groupAccess && !item.maxGuest) return tell('Maks Tamu wajib diisi jika Satu Akses Rombongan dicentang.');
+      
+      const existing = values.find(x => x.id === item.id);
+      if (existing && existing.status === 'Aktif' && item.status === 'Nonaktif') {
+        const ongoingBooking = ALL('booking_sewa').find(x => x.roomId === item.id && x.status === 'Confirmed');
+        if (ongoingBooking) {
+          return setModal({
+            type: 'confirm',
+            message: `Ruangan sedang dipakai jadwal yang sedang berjalan. Tidak dapat dinonaktifkan.`,
+            confirm: () => setModal(null)
+          });
+        }
+        
+        // Cek log akses untuk melihat apakah ada member yang belum check-out
+        const logs = ALL('log_akses').filter(x => x.roomId === item.id);
+        const inside = logs.filter(l => l.type === 'Masuk').length > logs.filter(l => l.type === 'Keluar').length;
+        if (inside) {
+          return tell('Masih ada member di dalam ruangan (check-in tanpa check-out). Tidak dapat dinonaktifkan.');
+        }
+      }
+    }
+    
+    if (tab === 'device') {
+      if (!item.name || !item.type || !item.clubId || !item.roomId || !item.status || !item.connection) return tell('Semua field ber-bintang (*) pada Header Device wajib diisi.');
+      for (const r of item.readers || []) {
+        if (!r.name || !r.method || !r.direction || !r.model || !r.sn || !r.mode) return tell('Semua field ber-bintang (*) pada Reader harus diisi.');
+        if (r.mac && !/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/i.test(r.mac)) return tell('Format MAC Address salah (XX:XX:XX:XX:XX:XX).');
+        const duplicate = values.filter(x => x.id !== item.id).flatMap(d => (d.readers || []).map(rd => ({...rd, deviceName: d.name}))).find(rd => (rd.sn||'').toLowerCase().trim() === (r.sn||'').toLowerCase().trim());
+        if (duplicate) return tell(`Serial Number sudah terdaftar pada ${duplicate.name} - ${duplicate.deviceName}`);
+        const dupInForm = (item.readers || []).find(x => x.id !== r.id && (x.sn||'').toLowerCase().trim() === (r.sn||'').toLowerCase().trim());
+        if (dupInForm) return tell(`Serial Number sudah terdaftar pada ${dupInForm.name}`);
+      }
+
+      const existing = values.find(x => x.id === item.id);
+
+      if (!item._forceSave) {
+        // Case Standby 2: Pindah ruangan tanpa maintenance
+        if (existing && existing.roomId !== item.roomId && item.status !== 'Maintenance') {
+          return tell(`Ubah status ${item.name} menjadi maintenance sebelum memindahkan ke ruangan lain`);
+        }
+
+        // Case Standby 3: Aktifkan device di ruangan nonaktif
+        if (item.status === 'Aktif') {
+          const r = ALL('ruangan').find(x => x.id === item.roomId);
+          if (r && r.status === 'Nonaktif') {
+            return tell(`${r.name} berstatus nonaktif, aktifkan ruangan terlebih dahulu`);
+          }
+        }
+
+        // Case Standby 1: Device dinonaktifkan saat kelas berlangsung
+        if (existing && existing.status === 'Aktif' && item.status === 'Nonaktif') {
+          const ongoingBooking = ALL('booking_sewa').find(x => x.roomId === item.roomId && x.status === 'Confirmed');
+          if (ongoingBooking) {
+            return setModal({
+              type: 'confirm',
+              message: `Jadwal sedang berlangsung di ruangan ini, akses peserta dialihkan ke metode lain (Manual/Staf), lanjutkan?`,
+              confirm: () => {
+                setModal(null);
+                save({ ...item, _forceSave: true });
+              }
+            });
+          }
+        }
+      }
+      // Remove _forceSave before writing so it doesn't pollute DB
+      delete item._forceSave;
+    }
+
+    if (tab === 'paket_bundling') {
+      const totalAllocation = (item.details || []).reduce((sum, d) => sum + Number(d.allocation || 0), 0);
+      if (totalAllocation !== Number(item.price)) return tell(`Total alokasi (Rp ${totalAllocation}) tidak sama dengan Harga Bundling (Rp ${item.price})`);
+    }
+
+    const existing = values.find(x => x.id === item.id);
+    if (existing) {
+      values = values.map(x => x.id === item.id ? item : x);
+    } else {
+      item = { ...item, id: uid(), code: nextCode(module.prefix, values) };
+      values = [...values, item];
+    }
+    write(STORAGE[tab], values);
+    setEditor(null);
+    setModal(null);
+    load();
+    tell('Data berhasil disimpan.');
+  }
+
+  function remove(item) {
+    if (tab === 'ruangan') {
+      const devs = ALL('device').filter(d => d.roomId === item.id);
+      if (devs.length) return tell(`${item.name} memiliki device terpasang. Hapus device terlebih dahulu.`);
+      const pm = ALL('paket_membership').some(x => x.roomIds?.includes(item.id));
+      const pk = ALL('paket_kelas').some(x => x.roomId === item.id);
+      const pr = ALL('paket_recovery').some(x => x.roomId === item.id);
+      const pp = ALL('paket_pool').some(x => x.roomId === item.id);
+      const ts = ALL('tarif_sewa').some(x => x.roomId === item.id);
+      const bs = ALL('booking_sewa').some(x => x.roomId === item.id);
+      if (pm || pk || pr || pp || ts || bs) return tell(`${item.name} masih dipanggil oleh paket/jadwal. Hapus relasinya terlebih dahulu.`);
+    }
+    if (tab === 'device') {
+      // Bebaskan device agar bisa dihapus (memecahkan deadlock dengan ruangan)
+    }
+    if (tab === 'unit') {
+      const pm = ALL('paket_membership').find(x => x.unitId === item.id);
+      if (pm) return tell(`${item.name} telah berelasi dengan ${pm.name}, unit bisnis tidak dapat dihapus`);
+    }
+    if (tab.startsWith('paket_') && item.sold > 0) {
+      return tell('Paket yang sudah terjual tidak dapat dihapus.');
+    }
+
+    setModal({
+      type: 'confirm',
+      message: `Yakin hapus ${item.name || item.code}?`,
+      confirm: () => {
+        write(STORAGE[tab], read(STORAGE[tab]).filter(x => x.id !== item.id));
+        setModal(null);
+        load();
+        tell('Data berhasil dihapus.');
+      }
+    });
+  }
+
+  const actions = { view: item => setModal({ type: 'view', item }), edit: launch, remove };
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark"><Dumbbell size={19} /></span>
+          <span>GYMFLOW<small>MANAGEMENT</small></span>
+        </div>
+        <div className="nav-caption">MASTER DATA</div>
+        <button className={`nav-item ${tab === 'ruangan' ? 'active' : ''}`} onClick={() => setTab('ruangan')}><DoorOpen size={17} /><span>Ruangan</span></button>
+        <button className={`nav-item ${tab === 'device' ? 'active' : ''}`} onClick={() => setTab('device')}><Cpu size={17} /><span>Device</span></button>
+        <button className={`nav-item ${tab === 'unit' ? 'active' : ''}`} onClick={() => setTab('unit')}><Briefcase size={17} /><span>Unit Bisnis</span></button>
+        
+        <div className="nav-caption">MASTER PAKET</div>
+        <button className={`nav-item ${tab === 'paket_membership' ? 'active' : ''}`} onClick={() => setTab('paket_membership')}><PackageIcon size={17} /><span>Membership</span></button>
+        <button className={`nav-item ${tab === 'paket_kelas' ? 'active' : ''}`} onClick={() => setTab('paket_kelas')}><PackageIcon size={17} /><span>Paket Kelas</span></button>
+        <button className={`nav-item ${tab === 'paket_trainer' ? 'active' : ''}`} onClick={() => setTab('paket_trainer')}><PackageIcon size={17} /><span>Paket Trainer</span></button>
+        <button className={`nav-item ${tab === 'paket_recovery' ? 'active' : ''}`} onClick={() => setTab('paket_recovery')}><PackageIcon size={17} /><span>Paket Recovery</span></button>
+        <button className={`nav-item ${tab === 'paket_pool' ? 'active' : ''}`} onClick={() => setTab('paket_pool')}><PackageIcon size={17} /><span>Paket Pool</span></button>
+        <button className={`nav-item ${tab === 'paket_bundling' ? 'active' : ''}`} onClick={() => setTab('paket_bundling')}><Layers size={17} /><span>Bundling</span></button>
+        
+        <div className="nav-caption">SEWA FASILITAS</div>
+        <button className={`nav-item ${tab === 'tarif_sewa' ? 'active' : ''}`} onClick={() => setTab('tarif_sewa')}><Clock size={17} /><span>Master Tarif Sewa</span></button>
+        <button className={`nav-item ${tab === 'booking_sewa' ? 'active' : ''}`} onClick={() => setTab('booking_sewa')}><CalendarCheck size={17} /><span>Booking Sewa</span></button>
+
+        <div className="nav-caption">TRANSAKSI & OPERASIONAL</div>
+        <button className={`nav-item ${tab === 'transaksi' ? 'active' : ''}`} onClick={() => setTab('transaksi')}><ShoppingCart size={17} /><span>Transaksi POS</span></button>
+        <button className={`nav-item ${tab === 'member' ? 'active' : ''}`} onClick={() => setTab('member')}><Users size={17} /><span>Data & Saldo Member</span></button>
+        
+        <div className="nav-caption">REPORTING</div>
+        <button className={`nav-item ${tab === 'log_akses' ? 'active' : ''}`} onClick={() => setTab('log_akses')}><FileText size={17} /><span>Log Akses</span></button>
+        
+        <div className="account">
+          <div className="avatar">ZA</div>
+          <div><b>Admin Gym</b><small>Administrator</small></div>
+        </div>
+      </aside>
+      
+      <main className="main">
+        <header className="topbar">
+          <div>Workspace <span>/</span> <b>{module.title}</b></div>
+        </header>
+        <div className="content">
+          <div className="page-heading">
+            <div>
+              <div className="eyebrow">MODUL ADMIN</div>
+              <h1>{module.title}</h1>
+            </div>
+            {tab !== 'log_akses' && (
+              <button className="primary" onClick={() => launch()}>
+                <Plus size={16} />Tambah {module.title}
+              </button>
+            )}
+            {tab === 'log_akses' && (
+              <button className="secondary" onClick={() => tell('File Excel sedang diunduh (Simulasi)')}>
+                <FileText size={16} />Export Excel
+              </button>
+            )}
+          </div>
+          
+          <section className="panel">
+            <div className="panel-title-row">
+              <div>
+                <h2>Daftar {module.title}</h2>
+                <p>{filtered.length} data ditemukan</p>
+              </div>
+              <div className="toolbar">
+                <button className={`secondary ${filterOpen ? 'selected' : ''}`} onClick={() => setFilterOpen(!filterOpen)}>
+                  <SlidersHorizontal size={15} /> Filter
+                </button>
+              </div>
+            </div>
+
+            <div className="controls-bar">
+              <div className="perpage-inline">
+                <span>Menampilkan</span>
+                <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(1); }}>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>baris</span>
+              </div>
+              <div className="search-box" style={{flex: 1, maxWidth: '360px'}}>
+                <Search size={16} />
+                <input value={query} placeholder="Cari nama / data..." onChange={e => { setQuery(e.target.value); setPage(1); }} />
+              </div>
+            </div>
+
+            {filterOpen && (
+              <div className="filter-panel-custom">
+                {tab === 'ruangan' ? (
+                  <>
+                    <label>
+                      <span>Nama Ruangan</span>
+                      <input placeholder="Cari nama ruangan..." value={pending.name || ''} onChange={e => setPending({ ...pending, name: e.target.value })} />
+                    </label>
+                    <label>
+                      <span>Club</span>
+                      <MultiSelect multi={false} value={pending.clubId || ''} options={[['', 'Semua Club'], ...ALL('club').map(c => [c.id, c.name])]} onChange={v => setPending({ ...pending, clubId: v })} />
+                    </label>
+                    <label>
+                      <span>Mekanisme Akses</span>
+                      <MultiSelect multi={false} value={pending.access || ''} options={[['', 'Semua Akses'], ...ACCESS.map(a => [a, a])]} onChange={v => setPending({ ...pending, access: v })} />
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <MultiSelect multi={false} value={pending.status || ''} options={[['', 'Semua Status'], ['Aktif', 'Aktif'], ['Nonaktif', 'Nonaktif']]} onChange={v => setPending({ ...pending, status: v })} />
+                    </label>
+                    <div className="filter-actions">
+                      <button className="primary" onClick={() => { setFilters({ ...pending }); setPage(1); }}>
+                        <SlidersHorizontal size={14} /> Filter
+                      </button>
+                      <button className="secondary" onClick={() => { setFilters({}); setPending({}); setQuery(''); setPage(1); }}>
+                        Reset
+                      </button>
+                    </div>
+                  </>
+                ) : tab === 'device' ? (
+                  <>
+                    <label>
+                      <span>Kode Device</span>
+                      <input placeholder="Cari kode..." value={pending.code || ''} onChange={e => setPending({ ...pending, code: e.target.value })} />
+                    </label>
+                    <label>
+                      <span>Nama Device</span>
+                      <input placeholder="Cari nama..." value={pending.name || ''} onChange={e => setPending({ ...pending, name: e.target.value })} />
+                    </label>
+                    <label>
+                      <span>Jenis Device</span>
+                      <MultiSelect multi={false} value={pending.type || ''} options={[['', 'Semua Jenis'], ...DEVICE_TYPE.map(x => [x, x])]} onChange={v => setPending({ ...pending, type: v })} />
+                    </label>
+                    <label>
+                      <span>Merk/Model</span>
+                      <input placeholder="Cari merk..." value={pending.model || ''} onChange={e => setPending({ ...pending, model: e.target.value })} />
+                    </label>
+                    <label>
+                      <span>Club</span>
+                      <MultiSelect multi={false} value={pending.clubId || ''} options={[['', 'Semua Club'], ...ALL('club').map(c => [c.id, c.name])]} onChange={v => setPending({ ...pending, clubId: v })} />
+                    </label>
+                    <label>
+                      <span>Ruangan</span>
+                      <MultiSelect multi={false} value={pending.roomId || ''} options={[['', 'Semua Ruangan'], ...ALL('ruangan').map(r => [r.id, r.name])]} onChange={v => setPending({ ...pending, roomId: v })} />
+                    </label>
+                    <label>
+                      <span>Status</span>
+                      <MultiSelect multi={false} value={pending.status || ''} options={[['', 'Semua Status'], ...DEVICE_STATUS.map(x => [x, x])]} onChange={v => setPending({ ...pending, status: v })} />
+                    </label>
+                    <label>
+                      <span>Status Koneksi</span>
+                      <MultiSelect multi={false} value={pending.connection || ''} options={[['', 'Semua Koneksi'], ['Online', 'Online'], ['Offline', 'Offline']]} onChange={v => setPending({ ...pending, connection: v })} />
+                    </label>
+                    <div className="filter-actions">
+                      <button className="primary" onClick={() => { setFilters({ ...pending }); setPage(1); }}>
+                        <SlidersHorizontal size={14} /> Filter
+                      </button>
+                      <button className="secondary" onClick={() => { setFilters({}); setPending({}); setQuery(''); setPage(1); }}>
+                        Reset
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {module.filter.map(([key, label]) => {
+                      if (key === 'status') {
+                        return (
+                          <label key={key}>
+                            <span>{label}</span>
+                            <MultiSelect multi={false} value={pending[key] || ''} options={[['', 'Semua'], ['Aktif', 'Aktif'], ['Nonaktif', 'Nonaktif']]} onChange={v => setPending({ ...pending, [key]: v })} />
+                          </label>
+                        );
+                      }
+                      return (
+                        <label key={key}>
+                          <span>{label}</span>
+                          <input value={pending[key] || ''} onChange={e => setPending({ ...pending, [key]: e.target.value })} />
+                        </label>
+                      );
+                    })}
+                    <div className="filter-actions">
+                      <button className="primary" onClick={() => { setFilters({ ...pending }); setPage(1); }}><SlidersHorizontal size={14} /> Filter</button>
+                      <button className="secondary" onClick={() => { setFilters({}); setPending({}); setQuery(''); setPage(1); }}>Reset</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            <DataTable columns={module.columns} rows={shown} sort={sort} onSort={(key, dir) => setSort({ key, dir })} actions={actions} moduleKey={tab} />
+
+            <div className="pagination">
+              <span>Menampilkan {filtered.length === 0 ? 0 : (page - 1) * perPage + 1} - {Math.min(page * perPage, filtered.length)} dari <b>{filtered.length}</b> data</span>
+              <div>
+                <button disabled={page === 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></button>
+                <span><b>{page}</b> / {pageCount}</span>
+                <button disabled={page === pageCount} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+      
+      {editor && <Editor module={tab} item={editor.item} onClose={() => setEditor(null)} onSave={save} tell={tell} setModal={setModal} />}
+      {modal && <Modal value={modal} module={tab} close={() => setModal(null)} />}
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
+  const [v, setV] = useState(item);
+  const upd = (key, val) => setV(old => ({ ...old, [key]: val }));
+  
+  const clubs = ALL('club');
+  const units = ALL('unit');
+  const rooms = ALL('ruangan');
+  const staff = ALL('pegawai');
+  
+  const field = (key, label, type = 'text', options = [], required = false, disabled = false, spanTwo = false) => {
+    return (
+      <label key={key} className={spanTwo ? 'span-two' : ''}>
+        <span className="field-label">{label}{required && <i className="req-star"> *</i>}</span>
+        {type === 'select' ? (
+          <MultiSelect disabled={disabled} value={v[key] ?? ''} options={options} onChange={value => upd(key, value)} multi={false} />
+        ) : type === 'multi' ? (
+          <MultiSelect disabled={disabled} value={v[key] || []} options={options} onChange={value => upd(key, value)} multi={true} />
+        ) : type === 'check' ? (
+          <span className="check-field">
+            <input disabled={disabled} type="checkbox" checked={!!v[key]} onChange={e => upd(key, e.target.checked)} />
+            {label}
+          </span>
+        ) : type === 'textarea' ? (
+          <textarea disabled={disabled} value={v[key] || ''} onChange={e => upd(key, e.target.value)} />
+        ) : type === 'currency' ? (
+          <div className="currency-wrapper">
+            <span className="prefix">Rp</span>
+            <input 
+              disabled={disabled} 
+              type="text" 
+              value={v[key] ? v[key].toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} 
+              onChange={e => {
+                const raw = e.target.value.replace(/\D/g, '');
+                upd(key, raw ? Number(raw) : '');
+              }} 
+            />
+          </div>
+        ) : (
+          <input disabled={disabled} type={type === 'number' ? 'number' : 'text'} value={v[key] ?? ''} onChange={e => upd(key, e.target.value)} />
+        )}
+      </label>
+    );
+  };
+
+  const submit = (e) => { e.preventDefault(); onSave(v); };
+
+  let body;
+
+  if (m === 'ruangan') {
+    let roomInUse = false;
+    if (item?.id) {
+      const pm = ALL('paket_membership').some(x => x.roomIds?.includes(item.id));
+      const pk = ALL('paket_kelas').some(x => x.roomId === item.id);
+      const pr = ALL('paket_recovery').some(x => x.roomId === item.id);
+      const pp = ALL('paket_pool').some(x => x.roomId === item.id);
+      const ts = ALL('tarif_sewa').some(x => x.roomId === item.id);
+      const bs = ALL('booking_sewa').some(x => x.roomId === item.id);
+      roomInUse = pm || pk || pr || pp || ts || bs;
+    }
+
+    body = (
+      <div className="form-grid">
+        {field('name', 'Nama Ruangan', 'text', [], true)}
+        {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]), true, roomInUse)}
+        {field('access', 'Mekanisme Akses', 'multi', ACCESS.map(a => [a, a]), true)}
+        {field('capacity', 'Kapasitas (Orang)', 'number')}
+        
+        {v.access?.includes('Excel Door Lock') && (
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('groupAccess', 'Satu Akses Rombongan', 'check')}
+            {v.groupAccess ? field('maxGuest', 'Maks Tamu', 'number') : <div></div>}
+          </div>
+        )}
+
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('staffActivation', 'Perlu Aktivasi Staf', 'check')}
+          {v.staffActivation ? field('picIds', 'PIC Aktivasi (Role)', 'multi', staff.map(s => [s.id, s.name])) : <div></div>}
+        </div>
+
+        {field('description', 'Deskripsi', 'textarea', [], false, false, true)}
+        {item.id && (
+          <label className="span-two">
+            <span className="field-label">Status Ruangan</span>
+            <span className="check-field">
+              <input type="checkbox" checked={v.status === 'Nonaktif'} onChange={e => upd('status', e.target.checked ? 'Nonaktif' : 'Aktif')} />
+              Nonaktifkan Ruangan
+            </span>
+          </label>
+        )}
+      </div>
+    );
+  } else if (m === 'device') {
+    body = (
+      <>
+        <div className="form-grid">
+          {field('name', 'Nama Device', 'text', [], true)}
+          {field('type', 'Jenis Device', 'select', [['', 'Pilih...'], ...DEVICE_TYPE.map(x => [x, x])], true)}
+          {field('model', 'Merk/Model')}
+          {field('clubId', 'Club', 'select', [['', 'Pilih...'], ...clubs.map(c => [c.id, c.name])], true)}
+          {field('roomId', 'Ruangan', 'select', [['', 'Pilih...'], ...rooms.map(r => [r.id, r.name])], true)}
+          {field('status', 'Status', 'select', [['', 'Pilih...'], ...DEVICE_STATUS.map(x => [x, x])], true)}
+          {field('connection', 'Status Koneksi', 'select', [['', 'Pilih...'], ['Online', 'Online'], ['Offline', 'Offline']], true)}
+        </div>
+        <div className="sub-heading">
+          <h3>Reader</h3>
+          <button type="button" className="secondary" onClick={() => upd('readers', [...(v.readers||[]), { id: uid(), name: '', method: '', direction: '', mode: '' }])}><Plus size={14} />Tambah Reader</button>
+        </div>
+        {(v.readers || []).map((r, i) => (
+          <div className="reader-block" key={r.id}>
+            <div className="reader-title">
+              <b>Reader {i+1}</b>
+              <button type="button" className="delete-action" onClick={() => upd('readers', v.readers.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button>
+            </div>
+            <div className="form-grid compact">
+              <label>Nama Reader * <input value={r.name||''} onChange={e => { const n=[...v.readers]; n[i].name=e.target.value; upd('readers', n); }}/></label>
+              <label>Metode * <select value={r.method || ''} onChange={e => { const n=[...v.readers]; n[i].method=e.target.value; upd('readers', n); }}><option value="">Pilih...</option><option value="QR">QR</option><option value="Face ID">Face ID</option></select></label>
+              <label>Arah * <select value={r.direction || ''} onChange={e => { const n=[...v.readers]; n[i].direction=e.target.value; upd('readers', n); }}><option value="">Pilih...</option><option value="Masuk">Masuk</option><option value="Keluar">Keluar</option></select></label>
+              <label>Merk/Model * <input value={r.model||''} onChange={e => { const n=[...v.readers]; n[i].model=e.target.value; upd('readers', n); }}/></label>
+              <label>SN * <input value={r.sn||''} onChange={e => { const n=[...v.readers]; n[i].sn=e.target.value; upd('readers', n); }} onBlur={e => {
+                const val = e.target.value.toLowerCase().trim();
+                if (!val) return;
+                const devices = JSON.parse(localStorage.getItem('gym_master_device') || '[]');
+                const duplicate = devices.filter(x => x.id !== v.id).flatMap(d => (d.readers || []).map(rd => ({...rd, deviceName: d.name}))).find(rd => (rd.sn||'').toLowerCase().trim() === val);
+                if (duplicate) tell(`Serial Number sudah terdaftar pada ${duplicate.name} - ${duplicate.deviceName}`);
+                else {
+                  const dupInForm = (v.readers || []).find(x => x.id !== r.id && (x.sn||'').toLowerCase().trim() === val);
+                  if (dupInForm) tell(`Serial Number sudah terdaftar pada ${dupInForm.name}`);
+                }
+              }}/></label>
+              
+              <label className="span-two">
+                <span className="field-label">Mode Koneksi *</span>
+                <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}>
+                    <input type="checkbox" style={{margin: 0, width: 'auto'}} checked={r.mode === 'Via Controller'} onChange={() => { const n=[...v.readers]; n[i].mode='Via Controller'; upd('readers', n); }} /> Via Controller
+                  </label>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}>
+                    <input type="checkbox" style={{margin: 0, width: 'auto'}} checked={r.mode === 'Langsung'} onChange={() => { const n=[...v.readers]; n[i].mode='Langsung'; upd('readers', n); }} /> Langsung
+                  </label>
+                </div>
+              </label>
+
+              <label>IP <input value={r.ip||''} onChange={e => { const n=[...v.readers]; n[i].ip=e.target.value; upd('readers', n); }}/></label>
+              <label>Port <input type="number" value={r.port||''} onChange={e => { const n=[...v.readers]; n[i].port=e.target.value; upd('readers', n); }}/></label>
+              <label className="span-two">MAC Address <input placeholder="XX:XX:XX:XX:XX:XX" value={r.mac||''} onChange={e => { const n=[...v.readers]; n[i].mac=e.target.value; upd('readers', n); }}/></label>
+            </div>
+          </div>
+        ))}
+      </>
+    );
+  } else if (m === 'unit') {
+    body = (
+      <div className="form-grid">
+        {field('name', 'Nama Unit Bisnis', 'text', [], true)}
+        <label className="span-two">
+          <span className="field-label">Status Unit Bisnis</span>
+          <span className="check-field">
+            <input type="checkbox" checked={v.status === 'Nonaktif'} onChange={e => upd('status', e.target.checked ? 'Nonaktif' : 'Aktif')} />
+            Nonaktifkan Unit Bisnis
+          </span>
+        </label>
+      </div>
+    );
+  } else if (m === 'paket_membership') {
+    body = (
+      <div className="form-grid">
+        {/* Field Lama Tetap */}
+        {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
+        {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+        {field('promo', 'Promo', 'text')}
+        {field('paymentType', 'Payment Type', 'select', [['PIF', 'PIF'], ['Recurring', 'Recurring']])}
+        {field('shift', 'Shift', 'select', [['All Day', 'All Day'], ['Morning', 'Morning'], ['Evening', 'Evening']])}
+        {field('category', 'Category', 'text')}
+        {field('name', 'Nama Paket', 'text', [], true)}
+        
+        {/* Field Baru */}
+        {field('unitId', 'Unit Bisnis', 'select', units.map(u => [u.id, u.name]))}
+        {field('roomIds', 'Ruangan yang Diakses', 'multi', rooms.map(r => [r.id, r.name]), true)}
+        {field('groupClassAccess', 'Akses Kelas Group', 'select', [['Tidak Termasuk', 'Tidak Termasuk'], ['Termasuk', 'Termasuk (Unlimited)']], true)}
+        
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('session', 'Session (menit/unlimited)', 'text')}
+          {field('quota', 'Quota', 'number')}
+        </div>
+        
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('price', 'Harga', 'currency', [], true)}
+          <div style={{display: 'flex', gap: '10px'}}>
+            {field('activeValue', 'Active Period', 'number', [], true)}
+            {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+          </div>
+        </div>
+
+        <div className="span-two" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '10px' }}>
+          {field('isUnlimited', 'Is Unlimited', 'check')}
+          {field('isActive', 'Is Active', 'check')}
+          {field('freeTrial', 'Free Trial', 'check')}
+          {field('onMobile', 'On Mobile', 'check')}
+          {field('bundlingValid', 'Bisa Masuk Bundling', 'check')}
+        </div>
+      </div>
+    );
+  } else if (m === 'paket_kelas') {
+    body = (
+      <div className="form-grid">
+        {/* Field Lama */}
+        {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
+        {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+        {field('name', 'Package Name', 'text', [], true)}
+        {field('icon', 'Icon', 'text')}
+        
+        {/* Field Baru */}
+        <label className="span-two">
+          <span className="field-label">Tipe Paket *</span>
+          <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Reguler'} onChange={() => upd('type', 'Reguler')} /> Reguler</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Add-on'} onChange={() => upd('type', 'Add-on')} /> Add-on</label>
+          </div>
+        </label>
+
+        {field('roomId', 'Ruangan', 'select', rooms.map(r => [r.id, r.name]), true)}
+        
+        <label className="span-two">
+          <span className="field-label">Cakupan Kelas *</span>
+          <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Semua Kelas Group'} onChange={() => upd('classScope', 'Semua Kelas Group')} /> Semua Kelas Group</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Kelas Tertentu'} onChange={() => upd('classScope', 'Kelas Tertentu')} /> Kelas Tertentu</label>
+          </div>
+        </label>
+
+        {v.classScope === 'Kelas Tertentu' && field('specificClasses', 'Pilih Kelas', 'multi', ['Yoga', 'Zumba', 'Pilates', 'Poundfit', 'BodyCombat'].map(x => [x, x]), true)}
+
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('quota', 'Kuota Sesi', 'number', [], true)}
+          {field('price', 'Harga (Rp)', 'number', [], true)}
+        </div>
+        
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('activeValue', 'Active Period', 'number', [], true)}
+          {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+        </div>
+      </div>
+    );
+  } else if (m === 'paket_trainer') {
+    body = (
+      <>
+        <div className="form-grid">
+          {/* Field Lama */}
+          {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
+          {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+          {field('trainer', 'Trainer/Employee', 'select', [['Semua Trainer', 'Semua Trainer'], ['T-01 - Budi', 'T-01 - Budi']])}
+          {field('name', 'Package Name', 'text', [], true)}
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('session', 'Session (Total)', 'number', [], true)}
+            {field('price', 'Harga Base (Rp)', 'number', [], true)}
+          </div>
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('activeValue', 'Active Period', 'number', [], true)}
+            {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+          </div>
+
+          <div className="span-two" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '10px' }}>
+            {field('onMobile', 'On Mobile', 'check')}
+          </div>
+
+          <hr className="span-two" />
+
+          {/* Field Baru */}
+          {field('unitId', 'Unit Bisnis', 'select', units.map(u => [u.id, u.name]))}
+          {field('maxParticipants', 'Maks Peserta per Sesi', 'number')}
+
+          <label className="span-two">
+            <span className="field-label">Tipe Sesi *</span>
+            <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Private'} onChange={() => upd('sessionType', 'Private')} /> Private</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Couple'} onChange={() => upd('sessionType', 'Couple')} /> Couple</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Group'} onChange={() => upd('sessionType', 'Group')} /> Group</label>
+            </div>
+          </label>
+          
+          {['Couple', 'Group'].includes(v.sessionType) && field('holdersCount', 'Jumlah Pemegang Roster', 'number')}
+        </div>
+
+        {['Couple', 'Group'].includes(v.sessionType) && (
+          <>
+            <div className="sub-heading">
+              <h3>Tabel Tier Harga & Komisi Trainer</h3>
+              <button type="button" className="secondary" onClick={() => upd('tiers', [...(v.tiers || []), { id: uid(), holders: 2, price: 0, commission: 0 }])}><Plus size={14} />Tambah Tier</button>
+            </div>
+            <div className="table-scroll" style={{border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+              <table>
+                <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                  <tr>
+                    <th>Jml Pemegang (Group)</th>
+                    <th>Harga Paket (Rp)</th>
+                    <th>Komisi Trainer per Sesi (Rp)</th>
+                    <th style={{width: '50px'}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(v.tiers || []).map((t, i) => (
+                    <tr key={t.id}>
+                      <td><input type="number" value={t.holders} onChange={e => { const n=[...v.tiers]; n[i].holders=Number(e.target.value); upd('tiers', n); }} style={{width: '100px', margin: 0}} /></td>
+                      <td><input type="number" value={t.price} onChange={e => { const n=[...v.tiers]; n[i].price=Number(e.target.value); upd('tiers', n); }} style={{width: '100%', margin: 0}} /></td>
+                      <td><input type="number" value={t.commission} onChange={e => { const n=[...v.tiers]; n[i].commission=Number(e.target.value); upd('tiers', n); }} style={{width: '100%', margin: 0}} /></td>
+                      <td style={{textAlign: 'center'}}><button type="button" className="delete-action" onClick={() => upd('tiers', v.tiers.filter((_, idx) => idx !== i))} style={{padding: '5px'}}><Trash2 size={15} /></button></td>
+                    </tr>
+                  ))}
+                  {!(v.tiers || []).length && <tr><td colSpan="4" style={{textAlign: 'center', color: '#999'}}>Belum ada tier. Klik Tambah Tier.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="simulation" style={{marginBottom: '15px'}}><p><i>Aturan: 1 Pembayar. Billing terpusat. Kuota sesi dipotong kolektif tiap kali 1 pertemuan grup/couple diadakan. Roster anggota dikunci permanen saat transaksi POS.</i></p></div>
+          </>
+        )}
+      </>
+    );
+  } else if (m === 'paket_recovery') {
+    body = (
+      <>
+        <div className="form-grid">
+          {field('name', 'Nama Paket', 'text', [], true)}
+          {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]), true)}
+          {field('recoveryType', 'Jenis Recovery', 'select', ['Massage', 'Jacuzzi', 'Nail', 'Sauna', 'Cold Plunge', 'Hyperbaric', 'Infrared'].map(x => [x, x]), true)}
+          {field('roomId', 'Ruangan', 'select', rooms.map(r => [r.id, r.name]), true)}
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('quota', 'Kuota Sesi', 'number', [], true)}
+            {field('reset', 'Reset Kuota', 'select', [['Tidak Reset', 'Tidak Reset'], ['Bulanan', 'Bulanan']])}
+          </div>
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('price', 'Harga (Rp)', 'number', [], true)}
+            <div style={{display: 'flex', gap: '10px'}}>
+              {field('activeValue', 'Masa Aktif', 'number', [], true)}
+              {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+            </div>
+          </div>
+          
+          <label className="span-two">Deskripsi <textarea value={v.description||''} onChange={e => upd('description', e.target.value)} rows="2"></textarea></label>
+
+          <div className="span-two" style={{ marginTop: '10px' }}>
+            {field('bundlingValid', 'Bisa Masuk Bundling', 'check')}
+          </div>
+        </div>
+        <div className="simulation" style={{marginTop: '15px'}}><p><i>Aturan Khusus: Jika ruangan terkait diset "Perlu Aktivasi Staf", maka sesi recovery dari paket ini hanya bisa diaktifkan/dipotong manual oleh Staf melalui App Staff. Tip: Untuk membuat "60x Recovery/bulan" sebagai benefit bundling, set kuota = 60, reset = Bulanan, dan centang Bisa Masuk Bundling.</i></p></div>
+      </>
+    );
+  } else if (m === 'paket_pool') {
+    body = (
+      <>
+        <div className="form-grid">
+          {field('name', 'Nama Paket', 'text', [], true)}
+          {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]), true)}
+          {field('roomId', 'Ruangan (Kolam)', 'select', rooms.map(r => [r.id, r.name]), true)}
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('quota', 'Kuota Sesi', 'number', [], true)}
+            {field('reset', 'Reset Kuota', 'select', [['Bulanan', 'Bulanan']], true)}
+          </div>
+          
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('price', 'Harga (Rp)', 'number', [], true)}
+            <div style={{display: 'flex', gap: '10px'}}>
+              {field('activeValue', 'Masa Aktif', 'number', [], true)}
+              {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+            </div>
+          </div>
+          
+          <div className="span-two" style={{ marginTop: '10px' }}>
+            {field('bundlingValid', 'Bisa Masuk Bundling', 'check')}
+          </div>
+        </div>
+        <div className="simulation" style={{marginTop: '15px'}}>
+          <p><i>SOP Pool: Akses kolam TIDAK menggunakan gate. Resepsionis scan QR member -> sistem cek kuota -> cetak wristband MERAH -> potong 1 sesi. Pengantar diberi wristband KUNING (bayar ±Rp10.000 via POS terpisah, bukan dipotong dari kuota ini). Wristband dikembalikan saat scan QR keluar.</i></p>
+        </div>
+      </>
+    );
+  } else if (m === 'paket_bundling') {
+    const allPkg = [
+      ...ALL('paket_membership').map(x => ({...x, _mod: 'paket_membership'})),
+      ...ALL('paket_kelas').map(x => ({...x, _mod: 'paket_kelas'})),
+      ...ALL('paket_trainer').map(x => ({...x, _mod: 'paket_trainer'})),
+      ...ALL('paket_recovery').map(x => ({...x, _mod: 'paket_recovery'})),
+      ...ALL('paket_pool').map(x => ({...x, _mod: 'paket_pool'}))
+    ].filter(p => p.bundlingValid && p.status === 'Aktif' && (p.type !== 'Add-on'));
+
+    const getPkg = (id) => allPkg.find(x => x.id === id) || {};
+
+    const recalcProportional = (details) => {
+      if (!v.price || !details?.length) return details;
+      const totalOrigin = details.reduce((acc, d) => acc + (getPkg(d.packageId).price || 0), 0);
+      if (totalOrigin === 0) return details;
+      let used = 0;
+      const res = details.map((d, i) => {
+        if (i === details.length - 1) return { ...d, allocation: Number(v.price) - used };
+        const prop = Math.round(((getPkg(d.packageId).price || 0) / totalOrigin) * Number(v.price));
+        used += prop;
+        return { ...d, allocation: prop };
+      });
+      return res;
+    };
+
+    body = (
+      <>
+        <div className="form-grid">
+          {field('name', 'Nama Bundling', 'text', [], true)}
+          {field('clubs', 'Club Berlaku', 'multi', clubs.map(c => [c.id, c.name]), true)}
+          
+          <label className="span-two">
+            <span className="field-label">Tipe Pemegang *</span>
+            <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Single'} onChange={() => upd('holder', 'Single')} /> Single</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Couple'} onChange={() => upd('holder', 'Couple')} /> Couple</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Group'} onChange={() => upd('holder', 'Group')} /> Group</label>
+            </div>
+          </label>
+
+          {['Couple', 'Group'].includes(v.holder) && field('holdersCount', 'Jumlah Pemegang', 'number', [], true)}
+          
+          <div className="span-two" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '10px' }}>
+            {v.holder === 'Group' && (
+              <label style={{marginRight: '20px'}}>
+                <span className="field-label">Satuan Harga *</span>
+                <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Paket'} onChange={() => upd('priceUnit', 'Per Paket')} /> Per Paket</label>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Orang'} onChange={() => upd('priceUnit', 'Per Orang')} /> Per Orang</label>
+                </div>
+              </label>
+            )}
+          </div>
+
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            <div style={{display: 'flex', gap: '10px'}}>
+              {field('activeValue', 'Masa Aktif', 'number', [], true)}
+              {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
+            </div>
+            {field('start', 'Mulai Aktif', 'select', [['Sejak Pembelian', 'Sejak Pembelian'], ['Sejak Kunjungan Pertama', 'Sejak Kunjungan Pertama']], true)}
+          </div>
+
+          <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+            {field('promoStart', 'Periode Promo Mulai', 'text')}
+            {field('promoEnd', 'Periode Promo Selesai', 'text')}
+          </div>
+
+          <label className="span-two">
+            <span className="field-label">Harga *</span>
+            <div className="currency-wrapper">
+              <span className="prefix">Rp</span>
+              <input 
+                type="text" 
+                value={v.price ? v.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} 
+                onChange={e => {
+                  const raw = e.target.value.replace(/\D/g, '');
+                  const newPrice = raw ? Number(raw) : '';
+                  setV(prev => {
+                    const updated = {...prev, price: newPrice};
+                    updated.details = recalcProportional(updated.details);
+                    return updated;
+                  });
+                }} 
+              />
+            </div>
+          </label>
+
+          <label className="span-two">Kanal Penjualan *
+            <div style={{display: 'flex', gap: '15px', marginTop: '5px'}}>
+              <label className="check-field" style={{margin: 0}}><input type="checkbox" checked={v.kanalPOS} onChange={e => upd('kanalPOS', e.target.checked)} /> POS</label>
+              <label className="check-field" style={{margin: 0}}><input type="checkbox" checked={v.kanalApps} onChange={e => upd('kanalApps', e.target.checked)} /> Apps Member</label>
+              <label className="check-field" style={{margin: 0}}><input type="checkbox" checked={v.kanalB2B} onChange={e => upd('kanalB2B', e.target.checked)} /> Voucher B2B</label>
+            </div>
+          </label>
+
+          <label className="span-two">Deskripsi <textarea value={v.description||''} onChange={e => upd('description', e.target.value)} rows="2"></textarea></label>
+        </div>
+
+        <div className="sub-heading">
+          <h3>Komponen Bundling</h3>
+          <button type="button" className="secondary" onClick={() => {
+            const arr = [...(v.details || []), { id: uid(), packageId: '', allocation: 0 }];
+            upd('details', recalcProportional(arr));
+          }}><Plus size={14} />Tambah Komponen</button>
+        </div>
+        {(v.details || []).map((d, i) => {
+          const pkg = getPkg(d.packageId);
+          const unit = ALL('unit').find(x => x.id === pkg.unitId);
+          return (
+            <div className="reader-block compact" key={d.id}>
+              <div className="form-grid">
+                <label className="span-two">Paket * <select value={d.packageId} onChange={e => {
+                  const n=[...v.details]; 
+                  n[i].packageId=e.target.value; 
+                  upd('details', recalcProportional(n)); 
+                }}>
+                  <option value="">-- Pilih Paket --</option>
+                  {allPkg.map(x => <option key={x.id} value={x.id}>{x.name} (Rp {x.price})</option>)}
+                </select></label>
+                
+                <label>Unit Bisnis <input readOnly value={unit?.name || '—'} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
+                <label>Harga Asal <input readOnly value={pkg.price || 0} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
+                <label className="span-two">Alokasi Harga (Rp) <input type="number" value={d.allocation} onChange={e => { const n=[...v.details]; n[i].allocation=Number(e.target.value); upd('details', n); }}/></label>
+                
+                <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => {
+                  const n = v.details.filter((_, idx) => idx !== i);
+                  upd('details', recalcProportional(n));
+                }}><Trash2 size={15} /></button>
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  } else if (m === 'tarif_sewa') {
+    body = (
+      <div className="form-grid">
+        {field('roomId', 'Fasilitas', 'select', rooms.map(r => [r.id, r.name]), true)}
+        {field('day', 'Hari', 'select', [['Senin-Minggu', 'Senin-Minggu'], ['Weekday', 'Weekday'], ['Weekend', 'Weekend']], true)}
+        {field('timeRange', 'Jam Peak/Off-Peak', 'text', [], true)}
+        {field('price', 'Tarif per Jam', 'currency', [], true)}
+        {field('overtime', 'Toleransi Overtime (menit)', 'number')}
+        {field('status', 'Status', 'select', STATUS.map(x => [x, x]), true)}
+      </div>
+    );
+  } else if (m === 'transaksi') {
+    const members = ALL('member');
+    
+    // Combine all products for POS simulation
+    const allPkg = [
+      ...ALL('paket_bundling').map(x => ({...x, _type: 'Bundling'})),
+      ...ALL('paket_membership').map(x => ({...x, _type: 'Paket Membership'})),
+      ...ALL('paket_kelas').map(x => ({...x, _type: 'Paket Kelas'})),
+      ...ALL('paket_trainer').map(x => ({...x, _type: 'Paket Trainer'})),
+      ...ALL('paket_recovery').map(x => ({...x, _type: 'Paket Recovery'})),
+      ...ALL('paket_pool').map(x => ({...x, _type: 'Paket Pool'}))
+    ].filter(p => p.status === 'Aktif');
+
+    const getPkg = (id) => allPkg.find(x => x.id === id) || {};
+
+    body = (
+      <>
+        <div className="form-grid">
+          {field('date', 'Tanggal Transaksi', 'text', [], true)}
+          {field('member', 'Member Utama (Pembayar)', 'select', members.map(m => [m.id, m.name]), true)}
+          {field('paymentScheme', 'Skema Bayar', 'select', [['PIF', 'Paid In Full (PIF)'], ['DP', 'DP'], ['Cicilan', 'Cicilan'], ['Open Credit', 'Open Credit'], ['Free Trial', 'Free Trial']], true)}
+          {field('total', 'Total Harga (Rp)', 'number', [], true)}
+          {field('status', 'Status', 'select', [['Berhasil', 'Berhasil'], ['Pending', 'Pending']], true)}
+        </div>
+        <div className="sub-heading">
+          <h3>Keranjang Belanja (Produk)</h3>
+          <button type="button" className="secondary" onClick={() => upd('details', [...(v.details || []), { id: uid(), packageId: '', roster: [] }])}><Plus size={14} />Tambah Produk</button>
+        </div>
+        {(v.details || []).map((d, i) => {
+          const pkg = getPkg(d.packageId);
+          const isGroup = pkg.holder === 'Couple' || pkg.holder === 'Group' || pkg.sessionType === 'Couple' || pkg.sessionType === 'Group';
+          return (
+            <div className="reader-block compact" key={d.id}>
+              <div className="form-grid">
+                <label className="span-two">Pilih Produk (Bundling / Paket Satuan) *
+                  <select value={d.packageId} onChange={e => { 
+                    const n=[...v.details]; 
+                    n[i].packageId=e.target.value; 
+                    if (!e.target.value) n[i].roster = [];
+                    upd('details', n); 
+                  }}>
+                    <option value="">-- Pilih Produk --</option>
+                    {allPkg.map(x => <option key={x.id} value={x.id}>[{x._type}] {x.name} - Rp {x.price || 0}</option>)}
+                  </select>
+                </label>
+                
+                {isGroup && (
+                  <div className="span-two" style={{background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
+                    <p style={{fontSize: '13px', margin: '0 0 10px 0'}}><b>Roster Anggota {pkg.holder || pkg.sessionType}</b> (Pendaftaran anggota dilakukan sekarang dan akan dikunci permanen)</p>
+                    {(d.roster || []).map((r, ri) => (
+                      <div key={ri} style={{display: 'flex', gap: '10px', marginBottom: '5px'}}>
+                        <input placeholder="Nama Anggota" value={r.name || ''} onChange={e => {
+                           const n = [...v.details];
+                           if (!n[i].roster) n[i].roster = [];
+                           n[i].roster[ri] = { ...n[i].roster[ri], name: e.target.value };
+                           upd('details', n);
+                        }} style={{margin: 0}} />
+                        <button type="button" className="delete-action" onClick={() => {
+                          const n = [...v.details];
+                          n[i].roster.splice(ri, 1);
+                          upd('details', n);
+                        }}><Trash2 size={15} /></button>
+                      </div>
+                    ))}
+                    <button type="button" className="secondary" style={{padding: '5px 10px', fontSize: '12px'}} onClick={() => {
+                       const n = [...v.details];
+                       if (!n[i].roster) n[i].roster = [];
+                       n[i].roster.push({ name: '' });
+                       upd('details', n);
+                    }}>+ Tambah Anggota Roster</button>
+                  </div>
+                )}
+                
+                <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => upd('details', v.details.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button>
+              </div>
+            </div>
+          );
+        })}
+        {v.details?.length > 0 && <div className="simulation">
+          <p><i>SOP Saldo & Refund / Upgrade: Saat transaksi ini disimpan (Berhasil), sistem akan membedah komponen Bundling dan memberikan saldo secara proporsional ke member-member terkait sebagai <b>Total Gabungan (per-batch)</b>. Pemotongan saldo menganut prinsip FIFO by Expiry. Refund/Upgrade/Void Bundling akan memproses seluruh komponennya secara utuh (tidak bisa di-void parsial).</i></p>
+        </div>}
+      </>
+    );
+  } else if (m === 'member') {
+    body = (
+      <div className="form-grid">
+        {field('name', 'Nama Lengkap', 'text', [], true)}
+        {field('phone', 'Nomor Telepon', 'text', [], true)}
+      </div>
+    );
+  } else if (m === 'booking_sewa') {
+    body = (
+      <>
+        <div className="form-grid">
+          {field('roomId', 'Fasilitas (Lapangan)', 'select', rooms.map(r => [r.id, r.name]), true)}
+          {field('date', 'Tanggal Booking', 'text', [], true)}
+          {field('startTime', 'Jam Mulai', 'text', [], true)}
+          {field('endTime', 'Jam Selesai', 'text', [], true)}
+          {field('renter', 'Nama Penyewa', 'text', [], true)}
+          {field('status', 'Status', 'select', [['Confirmed', 'Confirmed'], ['Pending', 'Pending'], ['Canceled', 'Canceled']], true)}
+        </div>
+        <div className="sub-heading">
+          <h3>Daftar Pemain yang Diajak</h3>
+          <button type="button" className="secondary" onClick={() => upd('players', [...(v.players || []), { id: uid(), name: '' }])}><Plus size={14} />Tambah Pemain</button>
+        </div>
+        {(v.players || []).map((p, i) => (
+          <div className="reader-block compact" key={p.id}>
+            <div className="form-grid">
+              <label>Nama Pemain <input value={p.name} onChange={e => { const n=[...v.players]; n[i].name=e.target.value; upd('players', n); }}/></label>
+              <button type="button" className="delete-action" onClick={() => upd('players', v.players.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button>
+            </div>
+          </div>
+        ))}
+        <div className="simulation">
+          <b>Kontingensi & SOP Terpusat</b>
+          <p style={{fontSize: '13px', color: '#666', marginTop: '5px'}}>
+            * Sistem otomatis mencetak QR akses terpisah untuk SETIAP pemain yang diajak.<br/>
+            * <b>Padel:</b> Dikelola in-house dan di-sync otomatis 2-arah dari Ayo Booking (Sistem menolak jika slot bentrok).<br/>
+            * <b>Tenis/Mini Soccer:</b> Kontrol manual & lampu menyala otomatis per jadwal.<br/>
+          </p>
+          {field('ayoBookingConflict', 'Simulasikan Bentrok Ayo Booking', 'check')}
+          {field('overtimeCharge', 'Tandai Overtime (Generate Charge)', 'check')}
+          <label style={{marginTop: '10px', display: 'block'}}>Tier Approval Buka Gate Manual (Bila Sistem Down)
+            <MultiSelect multi={false} value={v.approvalTier || ''} options={[['', 'Tier 1: Normal (QR / Face ID)'], ['tier2', 'Tier 2: Scan Apps Staff (Butuh Approval CS)'], ['tier3', 'Tier 3: Backdate Manual CRM (Sangat Ketat)']]} onChange={val => upd('approvalTier', val)} />
+          </label>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="overlay">
+      <form className="editor" onSubmit={submit}>
+        <header className="editor-header">
+          <div>
+            <div className="eyebrow">MASTER DATA / {SCHEMA[m].title.toUpperCase()}</div>
+            <h2>{v.id ? 'Edit' : 'Tambah'} {SCHEMA[m].title}</h2>
+          </div>
+          <button type="button" className="close-button" onClick={onClose}><X size={20} /></button>
+        </header>
+        <div className="editor-body">{body}</div>
+        <footer className="editor-footer">
+          <button type="button" className="secondary" onClick={onClose}>Batal</button>
+          <button className="primary"><Check size={15} />Simpan</button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function Modal({ value: m, module, close }) {
+  if (m.type === 'view') {
+    const item = m.item;
+    return (
+      <div className="overlay">
+        <div className="view-modal">
+          <button className="close-button float-close" onClick={close}><X /></button>
+          <div className="eyebrow">DETAIL {SCHEMA[module].title.toUpperCase()}</div>
+          <h2>{item.name || item.code}</h2>
+          <div className="view-grid">
+            {SCHEMA[module].columns.map(([key, label]) => {
+              if (module === 'unit' && key === 'status') return null;
+              if (module === 'unit' && key === 'code') return null;
+              if (module === 'device' && key === 'code') return null;
+              return (
+                <div key={key}>
+                  <small>{label}</small>
+                  <b>{text(item, key) || '—'}</b>
+                </div>
+              );
+            })}
+          </div>
+
+          {module === 'unit' && (
+            <div style={{ marginTop: '15px' }}>
+              <label className="check-field" style={{ width: '100%', opacity: 0.8, pointerEvents: 'none' }}>
+                <input type="checkbox" readOnly checked={item.status === 'Nonaktif'} />
+                Nonaktifkan Unit Bisnis
+              </label>
+            </div>
+          )}
+          
+          {module === 'member' && (
+            <>
+              <div className="sub-heading"><h3>Rincian Saldo (Batch FIFO)</h3></div>
+              {(item.balances || []).map((b, i) => (
+                <div className="view-sub" key={i} style={{flexDirection: 'column'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                    <b>{b.name} ({b.type})</b>
+                    <span>Exp: {b.expiry}</span>
+                  </div>
+                  <div>Sisa: {b.qty}</div>
+                </div>
+              ))}
+              <div className="sub-heading"><h3>Aksi Saldo</h3></div>
+              <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Saldo ditarik dari batch-nya sendiri, tidak mengganggu saldo lama member.')}>Void / Refund</button>
+                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Transfer/upgrade memperlakukan bundling sebagai satu unit.')}>Transfer / Upgrade</button>
+              </div>
+            </>
+          )}
+
+          {module === 'ruangan' && (
+            <>
+              <div className="view-grid" style={{ marginTop: 0, paddingTop: 0 }}>
+                <div className="span-two">
+                  <small>Deskripsi</small>
+                  <b>{item.description || '—'}</b>
+                </div>
+              </div>
+
+              <div className="sub-heading"><h3>Paket / Jadwal yang Memanggil Ruangan</h3></div>
+              <div className="table-scroll" style={{maxHeight: '150px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr><th>Nama Paket/Jadwal</th><th>Jenis Relasi</th></tr>
+                  </thead>
+                  <tbody>
+                    {ALL('paket_membership').filter(x => x.roomIds?.includes(item.id)).map(p => <tr key={p.id}><td>{p.name}</td><td>Membership</td></tr>)}
+                    {ALL('paket_kelas').filter(x => x.roomId === item.id).map(p => <tr key={p.id}><td>{p.name}</td><td>Kelas</td></tr>)}
+                    {ALL('paket_recovery').filter(x => x.roomId === item.id).map(p => <tr key={p.id}><td>{p.name}</td><td>Recovery</td></tr>)}
+                    {ALL('paket_pool').filter(x => x.roomId === item.id).map(p => <tr key={p.id}><td>{p.name}</td><td>Pool</td></tr>)}
+                    {ALL('tarif_sewa').filter(x => x.roomId === item.id).map(p => <tr key={p.id}><td>{p.name}</td><td>Sewa Ruangan</td></tr>)}
+                    {ALL('booking_sewa').filter(x => x.roomId === item.id).map(p => <tr key={p.id}><td>Booking oleh {p.renter}</td><td>Booking Jadwal</td></tr>)}
+                    {
+                      !ALL('paket_membership').some(x => x.roomIds?.includes(item.id)) &&
+                      !ALL('paket_kelas').some(x => x.roomId === item.id) &&
+                      !ALL('paket_recovery').some(x => x.roomId === item.id) &&
+                      !ALL('paket_pool').some(x => x.roomId === item.id) &&
+                      !ALL('tarif_sewa').some(x => x.roomId === item.id) &&
+                      !ALL('booking_sewa').some(x => x.roomId === item.id) &&
+                      <tr><td colSpan="2" style={{textAlign: 'center', color: '#999'}}>Tidak ada paket/jadwal terkait</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="sub-heading"><h3>Device Terpasang</h3></div>
+              <div className="table-scroll" style={{maxHeight: '150px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr><th>Nama Device</th><th>Tipe</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {ALL('device').filter(d => d.roomId === item.id).map(d => (
+                      <tr key={d.id}>
+                        <td>{d.name}</td>
+                        <td>{d.type}</td>
+                        <td><span className={`badge ${d.status === 'Aktif' ? 'green' : 'muted'}`}>{d.status}</span></td>
+                      </tr>
+                    ))}
+                    {!ALL('device').some(d => d.roomId === item.id) && <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>Tidak ada device terpasang</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {module === 'device' && (
+            <>
+              <div className="sub-heading"><h3>Daftar Reader Terpasang</h3></div>
+              <div className="table-scroll" style={{maxHeight: '200px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr>
+                      <th>Nama Reader</th>
+                      <th>Metode</th>
+                      <th>Arah</th>
+                      <th>Merk/Model</th>
+                      <th>SN</th>
+                      <th>Mode Koneksi</th>
+                      <th>IP</th>
+                      <th>Port</th>
+                      <th>MAC Address</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(item.readers || []).map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.name}</td>
+                        <td>{r.method}</td>
+                        <td>{r.direction}</td>
+                        <td>{r.model || '—'}</td>
+                        <td className="code">{r.sn}</td>
+                        <td>{r.mode}</td>
+                        <td>{r.ip || '—'}</td>
+                        <td>{r.port || '—'}</td>
+                        <td className="code">{r.mac || '—'}</td>
+                      </tr>
+                    ))}
+                    {!(item.readers || []).length && <tr><td colSpan="9" style={{textAlign: 'center', color: '#999'}}>Tidak ada reader terpasang</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <div className="sub-heading"><h3>Simulasi Engine (Validasi Tap)</h3></div>
+              <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Tap ditolak. Member tidak memiliki jadwal aktif di ruangan ini.')}>Simulasi Tap (Tolak)</button>
+                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Tap berhasil. Saldo/sesi FIFO dipotong. Gate terbuka.')}>Simulasi Tap (Buka Gate)</button>
+              </div>
+            </>
+          )}
+
+          <button className="primary full-width" onClick={close}>Tutup</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="overlay">
+      <div className="confirm-modal">
+        <div className="warning-symbol">!</div>
+        <h2>Konfirmasi</h2>
+        <p>{m.message}</p>
+        <div className="modal-actions">
+          <button className="secondary" onClick={close}>Tidak</button>
+          <button className="primary" onClick={m.confirm}>Ya</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default App;
-
-
-
-
-
-
-
