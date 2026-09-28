@@ -118,8 +118,8 @@ const SCHEMA = {
   },
   paket_trainer: {
     title: 'Paket Trainer', icon: PackageIcon, prefix: 'PT',
-    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['sessionType', 'Tipe Sesi'], ['price', 'Harga'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['sessionType', 'Tipe Sesi'], ['status', 'Status']]
+    columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['unitId', 'Unit Bisnis'], ['sessionType', 'Tipe Sesi'], ['trainer', 'Trainer'], ['session', 'Total Sesi'], ['price', 'Harga Base'], ['status', 'Status']],
+    filter: [['code', 'Kode'], ['name', 'Nama Paket'], ['unitId', 'Unit Bisnis'], ['sessionType', 'Tipe Sesi'], ['trainer', 'Trainer'], ['status', 'Status']]
   },
   paket_recovery: {
     title: 'Paket Recovery', icon: PackageIcon, prefix: 'PR',
@@ -134,7 +134,7 @@ const SCHEMA = {
   paket_bundling: {
     title: 'Bundling', icon: Layers, prefix: 'BD',
     columns: [['code', 'Kode Bundling'], ['name', 'Nama'], ['clubs', 'Club'], ['components', 'Isi Komponen'], ['holder', 'Tipe Pemegang'], ['price', 'Harga'], ['activeValue', 'Masa Aktif'], ['status', 'Status']],
-    filter: [['name', 'Nama'], ['clubs', 'Club'], ['holder', 'Tipe Pemegang'], ['status', 'Status']]
+    filter: [['name', 'Nama'], ['clubs', 'Club'], ['components', 'Komponen'], ['holder', 'Tipe Pemegang'], ['priceRange', 'Rentang Harga'], ['status', 'Status']]
   },
   tarif_sewa: {
     title: 'Tarif Sewa', icon: Clock, prefix: 'SW',
@@ -320,6 +320,15 @@ function App() {
       if (key === 'sessionType') return item.sessionType === value;
       if (key === 'recoveryType') return item.recoveryType === value;
       if (key === 'holder') return item.holder === value;
+      if (key === 'components') return (item.details || []).some(d => d.packageId === value);
+      if (key === 'priceRange') {
+        const p = Number(item.price || 0);
+        if (value === '0-500k') return p <= 500000;
+        if (value === '500k-1m') return p > 500000 && p <= 1000000;
+        if (value === '1m-3m') return p > 1000000 && p <= 3000000;
+        if (value === '>3m') return p > 3000000;
+        return true;
+      }
       if (key === 'day') return item.day === value;
       if (key === 'status') return item.status === value;
       return String(text(item, key)).toLowerCase().includes(value.toLowerCase());
@@ -351,13 +360,13 @@ function App() {
       return { ...base, sessionType: 'Private', activeUnit: 'Bulan', activeValue: 1, tiers: [], bundlingValid: false };
     }
     if (key === 'paket_recovery') {
-      return { ...base, reset: 'Tidak Reset', activeUnit: 'Hari', activeValue: 30, bundlingValid: false };
+      return { ...base, reset: '', activeUnit: 'Hari', activeValue: 30, bundlingValid: false };
     }
     if (key === 'paket_pool') {
-      return { ...base, reset: 'Bulanan', activeUnit: 'Bulan', activeValue: 1, bundlingValid: false };
+      return { ...base, reset: '', activeUnit: 'Bulan', activeValue: 1, bundlingValid: false };
     }
     if (key === 'paket_bundling') {
-      return { ...base, holder: 'Single', priceUnit: 'Per Paket', start: 'Sejak Pembelian', activeUnit: 'Bulan', activeValue: 1, kanalPOS: true, details: [] };
+      return { ...base, holder: '', priceUnit: 'Per Paket', start: '', activeUnit: '', activeValue: '', kanalPOS: true, details: [] };
     }
     if (key === 'tarif_sewa') {
       return { ...base, day: 'Senin-Minggu', peakLabel: 'Peak', overtime: 15 };
@@ -487,8 +496,8 @@ function App() {
     }
 
     if (tab === 'paket_bundling') {
-      if (!item.name || !item.clubs?.length || !item.holder || !item.activeValue || !item.start || item.price === undefined || item.price === '' || !item.details?.length) {
-        return tell('Nama Bundling, Club Berlaku, Tipe Pemegang, Masa Aktif, Mulai Aktif, Harga, dan minimal 1 Komponen wajib diisi.');
+      if (!item.name || !item.clubs?.length || !item.holder || !item.activeValue || !item.activeUnit || !item.start || item.price === undefined || item.price === '' || !item.details?.length) {
+        return tell('Nama Bundling, Club Berlaku, Tipe Pemegang, Masa Aktif, Satuan, Mulai Aktif, Harga, dan minimal 1 Komponen wajib diisi.');
       }
       if (['Couple', 'Group'].includes(item.holder) && !item.holdersCount) {
         return tell('Jumlah Pemegang wajib diisi untuk Couple / Group.');
@@ -722,25 +731,25 @@ function App() {
           <span>GYMFLOW<small>MANAGEMENT</small></span>
         </div>
         <div className="nav-caption">MASTER DATA</div>
-        <button className={`nav-item ${tab === 'ruangan' ? 'active' : ''}`} onClick={() => setTab('ruangan')}><DoorOpen size={17} /><span>Ruangan</span></button>
-        <button className={`nav-item ${tab === 'device' ? 'active' : ''}`} onClick={() => setTab('device')}><Cpu size={17} /><span>Device</span></button>
-        <button className={`nav-item ${tab === 'unit' ? 'active' : ''}`} onClick={() => setTab('unit')}><Briefcase size={17} /><span>Unit Bisnis</span></button>
+        <button className={`nav-item ${tab === 'ruangan' ? 'active' : ''}`} onClick={() => setTab('ruangan')}><DoorOpen size={17} /><span>Master Ruangan</span></button>
+        <button className={`nav-item ${tab === 'device' ? 'active' : ''}`} onClick={() => setTab('device')}><Cpu size={17} /><span>Master Device</span></button>
+        <button className={`nav-item ${tab === 'unit' ? 'active' : ''}`} onClick={() => setTab('unit')}><Briefcase size={17} /><span>Master Unit Bisnis</span></button>
         
         <div className="nav-caption">MASTER PAKET</div>
-        <button className={`nav-item ${tab === 'paket_membership' ? 'active' : ''}`} onClick={() => setTab('paket_membership')}><PackageIcon size={17} /><span>Membership</span></button>
+        <button className={`nav-item ${tab === 'paket_membership' ? 'active' : ''}`} onClick={() => setTab('paket_membership')}><PackageIcon size={17} /><span>Paket Membership</span></button>
         <button className={`nav-item ${tab === 'paket_kelas' ? 'active' : ''}`} onClick={() => setTab('paket_kelas')}><PackageIcon size={17} /><span>Paket Kelas</span></button>
-        <button className={`nav-item ${tab === 'paket_trainer' ? 'active' : ''}`} onClick={() => setTab('paket_trainer')}><PackageIcon size={17} /><span>Paket Trainer</span></button>
+        <button className={`nav-item ${tab === 'paket_trainer' ? 'active' : ''}`} onClick={() => setTab('paket_trainer')}><PackageIcon size={17} /><span>Paket Trainer / Kelas Sesi</span></button>
         <button className={`nav-item ${tab === 'paket_recovery' ? 'active' : ''}`} onClick={() => setTab('paket_recovery')}><PackageIcon size={17} /><span>Paket Recovery</span></button>
         <button className={`nav-item ${tab === 'paket_pool' ? 'active' : ''}`} onClick={() => setTab('paket_pool')}><PackageIcon size={17} /><span>Paket Pool</span></button>
-        <button className={`nav-item ${tab === 'paket_bundling' ? 'active' : ''}`} onClick={() => setTab('paket_bundling')}><Layers size={17} /><span>Bundling</span></button>
+        <button className={`nav-item ${tab === 'paket_bundling' ? 'active' : ''}`} onClick={() => setTab('paket_bundling')}><Layers size={17} /><span>Paket Bundling</span></button>
         
         <div className="nav-caption">SEWA FASILITAS</div>
         <button className={`nav-item ${tab === 'tarif_sewa' ? 'active' : ''}`} onClick={() => setTab('tarif_sewa')}><Clock size={17} /><span>Master Tarif Sewa</span></button>
         <button className={`nav-item ${tab === 'booking_sewa' ? 'active' : ''}`} onClick={() => setTab('booking_sewa')}><CalendarCheck size={17} /><span>Booking Sewa</span></button>
 
         <div className="nav-caption">TRANSAKSI & OPERASIONAL</div>
-        <button className={`nav-item ${tab === 'transaksi' ? 'active' : ''}`} onClick={() => setTab('transaksi')}><ShoppingCart size={17} /><span>Transaksi POS</span></button>
-        <button className={`nav-item ${tab === 'member' ? 'active' : ''}`} onClick={() => setTab('member')}><Users size={17} /><span>Data & Saldo Member</span></button>
+        <button className={`nav-item ${tab === 'transaksi' ? 'active' : ''}`} onClick={() => setTab('transaksi')}><ShoppingCart size={17} /><span>Transaksi POS & Saldo</span></button>
+        <button className={`nav-item ${tab === 'member' ? 'active' : ''}`} onClick={() => setTab('member')}><Users size={17} /><span>Data Member</span></button>
         
         <div className="nav-caption">REPORTING</div>
         <button className={`nav-item ${tab === 'log_akses' ? 'active' : ''}`} onClick={() => setTab('log_akses')}><FileText size={17} /><span>Log Akses</span></button>
@@ -875,6 +884,19 @@ function App() {
                       </button>
                     </div>
                   </>
+                ) : tab === 'paket_bundling' ? (
+                  <>
+                    <label><span>Nama</span><input value={pending.name || ''} onChange={e => setPending({ ...pending, name: e.target.value })} /></label>
+                    <label><span>Club</span><MultiSelect multi={false} value={pending.clubs || ''} options={[['', 'Semua'], ...ALL('club').map(c => [c.id, c.name])]} onChange={v => setPending({ ...pending, clubs: v })} /></label>
+                    <label><span>Komponen</span><MultiSelect multi={false} value={pending.components || ''} options={[['', 'Semua Komponen'], ...[...ALL('paket_membership'), ...ALL('paket_kelas'), ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')].filter(x => x.status==='Aktif').map(p => [p.id, p.name])]} onChange={v => setPending({ ...pending, components: v })} /></label>
+                    <label><span>Tipe Pemegang</span><MultiSelect multi={false} value={pending.holder || ''} options={[['', 'Semua Tipe'], ['Single', 'Single'], ['Couple', 'Couple'], ['Group', 'Group']]} onChange={v => setPending({ ...pending, holder: v })} /></label>
+                    <label><span>Rentang Harga</span><MultiSelect multi={false} value={pending.priceRange || ''} options={[['', 'Semua Harga'], ['0-500k', '< Rp 500 Ribu'], ['500k-1m', 'Rp 500rb - 1 Juta'], ['1m-3m', 'Rp 1 Juta - 3 Juta'], ['>3m', '> Rp 3 Juta']]} onChange={v => setPending({ ...pending, priceRange: v })} /></label>
+                    <label><span>Status</span><MultiSelect multi={false} value={pending.status || ''} options={[['', 'Semua'], ['Aktif', 'Aktif'], ['Nonaktif', 'Nonaktif']]} onChange={v => setPending({ ...pending, status: v })} /></label>
+                    <div className="filter-actions">
+                      <button className="primary" onClick={() => { setFilters({ ...pending }); setPage(1); }}><SlidersHorizontal size={14} /> Filter</button>
+                      <button className="secondary" onClick={() => { setFilters({}); setPending({}); setQuery(''); setPage(1); }}>Reset</button>
+                    </div>
+                  </>
                 ) : (
                   <>
                     {module.filter.map(([key, label]) => {
@@ -933,11 +955,15 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
   const staff = ALL('pegawai');
   
   const field = (key, label, type = 'text', options = [], required = false, disabled = false, spanTwo = false) => {
+    let finalOptions = options;
+    if (type === 'select' && options.length && options[0][0] !== '') {
+      finalOptions = [['', 'Pilih...'], ...options];
+    }
     return (
       <label key={key} className={spanTwo ? 'span-two' : ''}>
         <span className="field-label">{label}{required && <i className="req-star"> *</i>}</span>
         {type === 'select' ? (
-          <MultiSelect disabled={disabled} value={v[key] ?? ''} options={options} onChange={value => upd(key, value)} multi={false} />
+          <MultiSelect disabled={disabled} value={v[key] ?? ''} options={finalOptions} onChange={value => upd(key, value)} multi={false} />
         ) : type === 'multi' ? (
           <MultiSelect disabled={disabled} value={v[key] || []} options={options} onChange={value => upd(key, value)} multi={true} />
         ) : type === 'check' ? (
@@ -1132,14 +1158,13 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
         {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
         {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
         {field('name', 'Package Name', 'text', [], true)}
-        {field('icon', 'Icon', 'text')}
         
         {/* Field Baru */}
         <label className="span-two">
           <span className="field-label">Tipe Paket *</span>
           <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
-            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Reguler'} onChange={() => upd('type', 'Reguler')} /> Reguler</label>
-            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Add-on'} onChange={() => upd('type', 'Add-on')} /> Add-on</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Reguler'} onChange={() => upd('type', 'Reguler')} /> Reguler</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-paket" checked={v.type === 'Add-on'} onChange={() => upd('type', 'Add-on')} /> Add-on</label>
           </div>
         </label>
 
@@ -1148,8 +1173,8 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
         <label className="span-two">
           <span className="field-label">Cakupan Kelas *</span>
           <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
-            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Semua Kelas Group'} onChange={() => upd('classScope', 'Semua Kelas Group')} /> Semua Kelas Group</label>
-            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Kelas Tertentu'} onChange={() => upd('classScope', 'Kelas Tertentu')} /> Kelas Tertentu</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Semua Kelas Group'} onChange={() => upd('classScope', 'Semua Kelas Group')} /> Semua Kelas Group</label>
+            <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="cakupan-kelas" checked={v.classScope === 'Kelas Tertentu'} onChange={() => upd('classScope', 'Kelas Tertentu')} /> Kelas Tertentu</label>
           </div>
         </label>
 
@@ -1188,7 +1213,6 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
 
           <div className="span-two" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '10px' }}>
             {field('onMobile', 'On Mobile', 'check')}
-            {field('bundlingValid', 'Bisa Masuk Bundling', 'check')}
           </div>
 
           <hr className="span-two" />
@@ -1200,20 +1224,21 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           <label className="span-two">
             <span className="field-label">Tipe Sesi *</span>
             <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Private'} onChange={() => upd('sessionType', 'Private')} /> Private</label>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Couple'} onChange={() => upd('sessionType', 'Couple')} /> Couple</label>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Group'} onChange={() => upd('sessionType', 'Group')} /> Group</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Private'} onChange={() => upd('sessionType', 'Private')} /> Private</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Couple'} onChange={() => upd('sessionType', 'Couple')} /> Couple</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-sesi" checked={v.sessionType === 'Group'} onChange={() => upd('sessionType', 'Group')} /> Group</label>
             </div>
           </label>
           
-          {['Couple', 'Group'].includes(v.sessionType) && field('holdersCount', 'Jumlah Pemegang Roster', 'number')}
+          {v.sessionType === 'Couple' ? field('holdersCount', 'Jumlah Pemegang (Otomatis 2)', 'number', [], false, true) : null}
+          {v.sessionType === 'Group' ? field('holdersCount', 'Jumlah Pemegang (2/4/6)', 'number') : null}
         </div>
 
         {['Couple', 'Group'].includes(v.sessionType) && (
           <>
             <div className="sub-heading">
-              <h3>Tabel Tier Harga &amp; Komisi Trainer</h3>
-              <button type="button" className="secondary" onClick={() => upd('tiers', [...(v.tiers || []), { id: uid(), holders: 2, price: 0, commission: 0 }])}><Plus size={14} />Tambah Tier</button>
+              <h3>Tabel Tier Harga</h3>
+              <button type="button" className="secondary" onClick={() => upd('priceTiers', [...(v.priceTiers || []), { id: uid(), holders: 2, price: 0 }])}><Plus size={14} />Tambah Tier</button>
             </div>
             <div className="table-scroll" style={{border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
               <table>
@@ -1221,33 +1246,58 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                   <tr>
                     <th>Jml Pemegang (Group)</th>
                     <th>Harga Paket (Rp)</th>
+                    <th style={{width: '50px'}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(v.priceTiers || []).map((t, i) => (
+                    <tr key={t.id}>
+                      <td><input type="number" value={t.holders} onChange={e => { const n=[...v.priceTiers]; n[i].holders=Number(e.target.value); upd('priceTiers', n); }} /></td>
+                      <td>
+                        <div className="currency-wrapper">
+                          <span className="prefix">Rp</span>
+                          <input type="text" value={t.price ? t.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.priceTiers]; n[i].price=raw?Number(raw):0; upd('priceTiers', n); }} />
+                        </div>
+                      </td>
+                      <td style={{textAlign: 'center'}}><button type="button" className="delete-action" onClick={() => upd('priceTiers', v.priceTiers.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button></td>
+                    </tr>
+                  ))}
+                  {!(v.priceTiers || []).length && <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>Belum ada tier harga. Klik Tambah Tier.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="sub-heading">
+              <h3>Tabel Komisi per Tier</h3>
+              <button type="button" className="secondary" onClick={() => upd('commissionTiers', [...(v.commissionTiers || []), { id: uid(), holders: 2, commission: 0 }])}><Plus size={14} />Tambah Tier</button>
+            </div>
+            <div className="table-scroll" style={{border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+              <table>
+                <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                  <tr>
+                    <th>Jml Pemegang (Group)</th>
                     <th>Komisi Trainer per Sesi (Rp)</th>
                     <th style={{width: '50px'}}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(v.tiers || []).map((t, i) => (
+                  {(v.commissionTiers || []).map((t, i) => (
                     <tr key={t.id}>
-                      <td><input type="number" value={t.holders} onChange={e => { const n=[...v.tiers]; n[i].holders=Number(e.target.value); upd('tiers', n); }} style={{width: '100px', margin: 0}} /></td>
+                      <td><input type="number" value={t.holders} onChange={e => { const n=[...v.commissionTiers]; n[i].holders=Number(e.target.value); upd('commissionTiers', n); }} /></td>
                       <td>
-                        <div className="currency-wrapper" style={{minHeight: '32px'}}>
-                          <span className="prefix" style={{padding: '0 8px', fontSize: '12px'}}>Rp</span>
-                          <input type="text" value={t.price ? t.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.tiers]; n[i].price=raw?Number(raw):0; upd('tiers', n); }} style={{border:'none',boxShadow:'none',outline:'none',minHeight:0,padding:'0 8px'}} />
+                        <div className="currency-wrapper">
+                          <span className="prefix">Rp</span>
+                          <input type="text" value={t.commission ? t.commission.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.commissionTiers]; n[i].commission=raw?Number(raw):0; upd('commissionTiers', n); }} />
                         </div>
                       </td>
-                      <td>
-                        <div className="currency-wrapper" style={{minHeight: '32px'}}>
-                          <span className="prefix" style={{padding: '0 8px', fontSize: '12px'}}>Rp</span>
-                          <input type="text" value={t.commission ? t.commission.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.tiers]; n[i].commission=raw?Number(raw):0; upd('tiers', n); }} style={{border:'none',boxShadow:'none',outline:'none',minHeight:0,padding:'0 8px'}} />
-                        </div>
-                      </td>
-                      <td style={{textAlign: 'center'}}><button type="button" className="delete-action" onClick={() => upd('tiers', v.tiers.filter((_, idx) => idx !== i))} style={{padding: '5px'}}><Trash2 size={15} /></button></td>
+                      <td style={{textAlign: 'center'}}><button type="button" className="delete-action" onClick={() => upd('commissionTiers', v.commissionTiers.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button></td>
                     </tr>
                   ))}
-                  {!(v.tiers || []).length && <tr><td colSpan="4" style={{textAlign: 'center', color: '#999'}}>Belum ada tier. Klik Tambah Tier.</td></tr>}
+                  {!(v.commissionTiers || []).length && <tr><td colSpan="3" style={{textAlign: 'center', color: '#999'}}>Belum ada tier komisi. Klik Tambah Tier.</td></tr>}
                 </tbody>
               </table>
             </div>
+
             <div className="simulation" style={{marginBottom: '15px'}}><p><i>Aturan: 1 Pembayar. Billing terpusat. Kuota sesi dipotong kolektif tiap kali 1 pertemuan grup/couple diadakan. Roster anggota dikunci permanen saat transaksi POS.</i></p></div>
           </>
         )}
@@ -1322,9 +1372,10 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       ...ALL('paket_recovery').map(x => ({...x, _mod: 'paket_recovery'})),
       ...ALL('paket_pool').map(x => ({...x, _mod: 'paket_pool'}))
     ].filter(p => {
-      if (p.status !== 'Aktif') return false;
+      if (p._mod === 'paket_membership' ? !p.isActive : p.status !== 'Aktif') return false;
       if (p.type === 'Add-on') return false;
       if (p._mod === 'paket_kelas') return p.type === 'Reguler';
+      if (['paket_membership', 'paket_trainer'].includes(p._mod)) return true;
       return !!p.bundlingValid;
     });
 
@@ -1354,9 +1405,9 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           <label className="span-two">
             <span className="field-label">Tipe Pemegang *</span>
             <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Single'} onChange={() => upd('holder', 'Single')} /> Single</label>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Couple'} onChange={() => upd('holder', 'Couple')} /> Couple</label>
-              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Group'} onChange={() => upd('holder', 'Group')} /> Group</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Single'} onChange={() => upd('holder', 'Single')} /> Single</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Couple'} onChange={() => upd('holder', 'Couple')} /> Couple</label>
+              <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="tipe-pemegang" checked={v.holder === 'Group'} onChange={() => upd('holder', 'Group')} /> Group</label>
             </div>
           </label>
 
@@ -1367,8 +1418,8 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
               <label style={{marginRight: '20px'}}>
                 <span className="field-label">Satuan Harga *</span>
                 <div className="check-field" style={{gap: '15px', marginTop: '6px'}}>
-                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Paket'} onChange={() => upd('priceUnit', 'Per Paket')} /> Per Paket</label>
-                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="radio" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Orang'} onChange={() => upd('priceUnit', 'Per Orang')} /> Per Orang</label>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Paket'} onChange={() => upd('priceUnit', 'Per Paket')} /> Per Paket</label>
+                  <label style={{display: 'flex', gap: '5px', fontWeight: 'normal', flexDirection: 'row', alignItems: 'center', margin: 0}}><input type="checkbox" style={{margin: 0, width: 'auto'}} name="satuan-harga" checked={v.priceUnit === 'Per Orang'} onChange={() => upd('priceUnit', 'Per Orang')} /> Per Orang</label>
                 </div>
               </label>
             )}
@@ -1430,24 +1481,38 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           const unit = ALL('unit').find(x => x.id === pkg.unitId);
           return (
             <div className="reader-block compact" key={d.id}>
-              <div className="form-grid">
-                <label className="span-two">Paket * <select value={d.packageId} onChange={e => {
-                  const n=[...v.details]; 
-                  n[i].packageId=e.target.value; 
-                  upd('details', recalcProportional(n)); 
-                }}>
-                  <option value="">-- Pilih Paket --</option>
-                  {allPkg.map(x => <option key={x.id} value={x.id}>{x.name} (Rp {Number(x.price || 0).toLocaleString('id-ID')})</option>)}
-                </select></label>
+              <div className="form-grid" style={{position: 'relative'}}>
+                <label className="span-two">
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px'}}>
+                    <span style={{marginBottom: 0}}>Paket *</span>
+                    <button type="button" className="delete-action" onClick={() => {
+                      const n = v.details.filter((_, idx) => idx !== i);
+                      upd('details', recalcProportional(n));
+                    }}><Trash2 size={15} /></button>
+                  </div>
+                  <select value={d.packageId} onChange={e => {
+                    const n=[...v.details]; 
+                    n[i].packageId=e.target.value; 
+                    upd('details', recalcProportional(n)); 
+                  }}>
+                    <option value="">-- Pilih Paket --</option>
+                    {allPkg.map(x => {
+                      const modLabel = {paket_membership: 'Membership', paket_kelas: 'Kelas Reguler', paket_trainer: 'Trainer', paket_recovery: 'Recovery', paket_pool: 'Pool'}[x._mod] || 'Paket';
+                      return <option key={x.id} value={x.id}>[{modLabel}] {x.name} (Rp {Number(x.price || 0).toLocaleString('id-ID')})</option>;
+                    })}
+                  </select>
+                </label>
                 
                 <label>Unit Bisnis <input readOnly value={unit?.name || '—'} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
                 <label>Harga Asal <input readOnly value={`Rp ${Number(pkg.price || 0).toLocaleString('id-ID')}`} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
-                <label className="span-two">Alokasi Harga (Rp) <input type="number" value={d.allocation} onChange={e => { const n=[...v.details]; n[i].allocation=Number(e.target.value); upd('details', n); }}/></label>
                 
-                <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => {
-                  const n = v.details.filter((_, idx) => idx !== i);
-                  upd('details', recalcProportional(n));
-                }}><Trash2 size={15} /></button>
+                <label className="span-two">
+                  <span>Alokasi Harga (Rp)</span>
+                  <div className="currency-wrapper">
+                    <span className="prefix">Rp</span>
+                    <input type="text" value={d.allocation ? d.allocation.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.details]; n[i].allocation=raw?Number(raw):0; upd('details', n); }} />
+                  </div>
+                </label>
               </div>
             </div>
           );
@@ -1487,7 +1552,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       ...ALL('paket_recovery').map(x => ({...x, _type: 'Paket Recovery'})),
       ...ALL('paket_pool').map(x => ({...x, _type: 'Paket Pool'}))
     ].filter(p => {
-      if (p.status !== 'Aktif') return false;
+      if (p._type === 'Paket Membership' ? !p.isActive : p.status !== 'Aktif') return false;
       // Rule: Add-on tidak muncul di POS jika member belum punya paket aktif
       if (p.type === 'Add-on' && !hasActivePlan) return false;
       // Rule: Jika salah satu komponen bundling nonaktif, bundling tidak bisa dijual baru
@@ -1679,44 +1744,61 @@ function Modal({ value: m, module, close, tell, load }) {
             </div>
           )}
           
-          {module === 'member' && (
-            <>
-              <div className="sub-heading"><h3>Rincian Saldo (Batch FIFO)</h3></div>
-              {(item.balances || []).map((b, i) => (
-                <div className="view-sub" key={i} style={{flexDirection: 'column'}}>
-                  <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                    <b>{b.name} ({b.type})</b>
-                    <span>Exp: {b.expiry}</span>
+          {module === 'member' && (() => {
+            const grouped = (item.balances || []).reduce((acc, b) => {
+              if (!acc[b.type]) acc[b.type] = { type: b.type, qty: 0, unlimited: false, batches: [] };
+              acc[b.type].batches.push(b);
+              if (b.qty === 'Unlimited' || acc[b.type].unlimited) {
+                acc[b.type].unlimited = true;
+                acc[b.type].qty = 'Unlimited';
+              } else {
+                acc[b.type].qty += Number(b.qty || 0);
+              }
+              return acc;
+            }, {});
+            const groups = Object.values(grouped);
+            
+            return (
+              <>
+                <div className="sub-heading"><h3>Total Saldo Gabungan</h3></div>
+                {groups.map((g, i) => (
+                  <div className="view-sub" key={i} style={{flexDirection: 'column', marginBottom: '10px', background: '#eff6ff', borderColor: '#bfdbfe'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <b style={{color: '#1d4ed8'}}>{g.type}</b>
+                      <span style={{fontSize: '16px', fontWeight: 'bold', color: '#1e40af'}}>{g.qty} {g.unlimited ? '' : 'Sesi'}</span>
+                    </div>
+                    <div style={{marginTop: '5px', fontSize: '12px', color: '#3b82f6'}}>
+                      Disimpan dalam {g.batches.length} batch (Sistem FIFO)
+                    </div>
                   </div>
-                  <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px'}}>
-                    <span>Sisa: <b>{b.qty}</b></span>
-                    <small style={{color: '#6B7280'}}>{b.sourceBundling ? 'Dari Bundling' : 'Paket Satuan'}</small>
-                  </div>
+                ))}
+                {groups.length === 0 && (
+                  <div style={{padding: '12px', textAlign: 'center', color: '#9CA3AF'}}>Belum ada saldo aktif</div>
+                )}
+                
+                <div className="sub-heading"><h3>Aksi Saldo</h3></div>
+                <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
+                  <button className="secondary" style={{flex: 1}} onClick={() => {
+                    if (!item.balances?.length) return tell?.('Member tidak memiliki saldo untuk di-void.');
+                    const latest = item.balances[item.balances.length - 1];
+                    const mems = read(STORAGE['member']).map(x => ({
+                       ...x, 
+                       balances: (x.balances || []).filter(b => b.transactionId !== latest.transactionId)
+                    }));
+                    write(STORAGE['member'], mems);
+                    if (latest.transactionId) {
+                      const trxs = read(STORAGE['transaksi']).map(t => t.id === latest.transactionId ? { ...t, status: 'Void / Refund' } : t);
+                      write(STORAGE['transaksi'], trxs);
+                    }
+                    load?.();
+                    close();
+                    tell?.(`Transaksi terbaru di-void. Seluruh saldo komponen dari transaksi ini ditarik dari semua member terkait.`);
+                  }}>Void / Refund Transaksi Terbaru</button>
+                  <button className="secondary" style={{flex: 1}} onClick={() => tell?.('Simulasi: Transfer/Upgrade memperlakukan transaksi (termasuk seluruh isi bundling) sebagai satu unit utuh yang terpusat.')}>Transfer / Upgrade</button>
                 </div>
-              ))}
-              {!(item.balances || []).length && (
-                <div style={{padding: '12px', textAlign: 'center', color: '#9CA3AF'}}>Belum ada saldo aktif</div>
-              )}
-              <div className="sub-heading"><h3>Aksi Saldo</h3></div>
-              <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
-                <button className="secondary" style={{flex: 1}} onClick={() => {
-                  if (!item.balances?.length) return tell?.('Member tidak memiliki saldo untuk di-void.');
-                  const latest = item.balances[item.balances.length - 1];
-                  const remaining = item.balances.slice(0, -1);
-                  const mems = read(STORAGE['member']).map(x => x.id === item.id ? { ...x, balances: remaining } : x);
-                  write(STORAGE['member'], mems);
-                  if (latest.transactionId) {
-                    const trxs = read(STORAGE['transaksi']).map(t => t.id === latest.transactionId ? { ...t, status: 'Void / Refund' } : t);
-                    write(STORAGE['transaksi'], trxs);
-                  }
-                  load?.();
-                  close();
-                  tell?.(`Saldo batch [${latest.name}] berhasil ditarik/void tanpa mengganggu saldo lama.`);
-                }}>Void / Refund Batch Terbaru</button>
-                <button className="secondary" style={{flex: 1}} onClick={() => tell?.('Simulasi: Transfer/Upgrade bundling diproses sebagai satu unit utuh.')}>Transfer / Upgrade</button>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
 
           {module === 'paket_membership' && (
             <>
