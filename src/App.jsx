@@ -134,7 +134,7 @@ const SCHEMA = {
   paket_bundling: {
     title: 'Bundling', icon: Layers, prefix: 'BD',
     columns: [['code', 'Kode Bundling'], ['name', 'Nama'], ['clubs', 'Club'], ['components', 'Isi Komponen'], ['holder', 'Tipe Pemegang'], ['price', 'Harga'], ['activeValue', 'Masa Aktif'], ['status', 'Status']],
-    filter: [['name', 'Nama'], ['status', 'Status']]
+    filter: [['name', 'Nama'], ['clubs', 'Club'], ['holder', 'Tipe Pemegang'], ['status', 'Status']]
   },
   tarif_sewa: {
     title: 'Tarif Sewa', icon: Clock, prefix: 'SW',
@@ -175,7 +175,11 @@ const text = (obj, k) => {
   if (k === 'price' || k === 'total') return `Rp ${Number(obj[k] || 0).toLocaleString('id-ID')}`;
   if (k === 'activeValue') return `${obj.activeValue || ''} ${obj.activeUnit || ''}`;
   if (k === 'groupAccess' || k === 'staffActivation') return obj[k] ? 'Ya' : 'Tidak';
-  if (k === 'components') return obj.details?.length > 2 ? `${obj.details[0].name}, ${obj.details[1].name} +${obj.details.length - 2}` : (obj.details || []).map(d => d.name).join(', ');
+  if (k === 'components') {
+    const allPkg = [...ALL('paket_membership'), ...ALL('paket_kelas'), ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')];
+    const names = (obj.details || []).map(d => allPkg.find(x => x.id === d.packageId)?.name || 'Unknown');
+    return names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : names.join(', ');
+  }
   if (k === 'activeBalances') return obj.balances ? `${obj.balances.length} Paket` : '0 Paket';
   if (k === 'playersCount') return obj.players ? `${obj.players.length} Orang` : '0 Orang';
   if (k === 'time') return `${obj.startTime || '00:00'} - ${obj.endTime || '00:00'}`;
@@ -389,11 +393,96 @@ function App() {
       if (totalAllocation !== Number(item.price)) return tell(`Total alokasi (Rp ${totalAllocation}) tidak sama dengan Harga Bundling (Rp ${item.price})`);
     }
 
+    if (tab === 'booking_sewa') {
+      if (item.ayoBookingConflict) {
+        return tell('Gagal menyimpan: Slot bentrok dengan jadwal dari Ayo Booking.');
+      }
+    }
+
     const existing = values.find(x => x.id === item.id);
-    if (existing) {
+    let isNew = !existing;
+    if (isNew) {
+      item = { ...item, id: uid(), code: nextCode(module.prefix, values) };
+    }
+
+    if (tab === 'transaksi' && item.status === 'Berhasil' && !item.balancesProcessed) {
+      const allPkg = [
+        ...ALL('paket_bundling').map(x => ({...x, _type: 'Bundling'})),
+        ...ALL('paket_membership').map(x => ({...x, _type: 'Paket Membership'})),
+        ...ALL('paket_kelas').map(x => ({...x, _type: 'Paket Kelas'})),
+        ...ALL('paket_trainer').map(x => ({...x, _type: 'Paket Trainer'})),
+        ...ALL('paket_recovery').map(x => ({...x, _type: 'Paket Recovery'})),
+        ...ALL('paket_pool').map(x => ({...x, _type: 'Paket Pool'}))
+      ];
+      const members = ALL('member');
+      const buyerId = item.member;
+      let memberUpdates = {};
+      const getPkg = (id) => allPkg.find(x => x.id === id);
+
+      (item.details || []).forEach(d => {
+        const pkg = getPkg(d.packageId);
+        if (!pkg) return;
+
+        const addBalanceToMember = (memberId, componentPkg, sourceBundlingId = null, roster = null) => {
+          if (!memberUpdates[memberId]) {
+            memberUpdates[memberId] = members.find(m => m.id === memberId)?.balances || [];
+          }
+          let expiryDate = new Date();
+          const activeVal = componentPkg.activeValue || pkg.activeValue || 30;
+          const activeUnit = componentPkg.activeUnit || pkg.activeUnit || 'Hari';
+          if (activeUnit === 'Hari') expiryDate.setDate(expiryDate.getDate() + Number(activeVal));
+          if (activeUnit === 'Bulan') expiryDate.setMonth(expiryDate.getMonth() + Number(activeVal));
+
+          let qty = componentPkg.quota || componentPkg.session || 1;
+          if (componentPkg.isUnlimited) qty = 'Unlimited';
+
+          const newBalance = {
+            id: uid(),
+            transactionId: item.id,
+            packageId: componentPkg.id,
+            name: componentPkg.name,
+            type: componentPkg._type,
+            qty: qty,
+            expiry: expiryDate.toISOString().split('T')[0],
+            sourceBundling: sourceBundlingId,
+            roomId: componentPkg.roomId,
+            roomIds: componentPkg.roomIds,
+            classScope: componentPkg.classScope,
+            specificClasses: componentPkg.specificClasses,
+            sessionType: componentPkg.sessionType,
+            groupClassAccess: componentPkg.groupClassAccess,
+            roster: roster
+          };
+          memberUpdates[memberId].push(newBalance);
+        };
+
+        const isGroup = pkg.holder === 'Couple' || pkg.holder === 'Group' || pkg.sessionType === 'Couple' || pkg.sessionType === 'Group';
+        let rosterData = isGroup ? d.roster : [];
+
+        if (pkg._type === 'Bundling') {
+           (pkg.details || []).forEach(bd => {
+              const compPkg = getPkg(bd.packageId);
+              if (compPkg) addBalanceToMember(buyerId, compPkg, pkg.id, rosterData);
+           });
+        } else {
+           addBalanceToMember(buyerId, pkg, null, rosterData);
+        }
+      });
+
+      let currentMembers = [...members];
+      Object.keys(memberUpdates).forEach(mId => {
+        const idx = currentMembers.findIndex(m => m.id === mId);
+        if (idx > -1) {
+          currentMembers[idx] = { ...currentMembers[idx], balances: memberUpdates[mId] };
+        }
+      });
+      write(STORAGE['member'], currentMembers);
+      item.balancesProcessed = true;
+    }
+
+    if (!isNew) {
       values = values.map(x => x.id === item.id ? item : x);
     } else {
-      item = { ...item, id: uid(), code: nextCode(module.prefix, values) };
       values = [...values, item];
     }
     write(STORAGE[tab], values);
@@ -416,11 +505,16 @@ function App() {
       if (pm || pk || pr || pp || ts || bs) return tell(`${item.name} masih dipanggil oleh paket/jadwal. Hapus relasinya terlebih dahulu.`);
     }
     if (tab === 'device') {
-      // Bebaskan device agar bisa dihapus (memecahkan deadlock dengan ruangan)
+      if (item.roomId) {
+        const roomName = ALL('ruangan').find(x => x.id === item.roomId)?.name || 'Ruangan';
+        return tell(`[${item.name}] telah berelasi dengan [${roomName}], device tidak dapat dihapus`);
+      }
     }
     if (tab === 'unit') {
       const pm = ALL('paket_membership').find(x => x.unitId === item.id);
-      if (pm) return tell(`${item.name} telah berelasi dengan ${pm.name}, unit bisnis tidak dapat dihapus`);
+      const pt = ALL('paket_trainer').find(x => x.unitId === item.id);
+      const relasi = pm || pt;
+      if (relasi) return tell(`[${item.name}] telah berelasi dengan [${relasi.name}], unit bisnis tidak dapat dihapus`);
     }
     if (tab.startsWith('paket_') && item.sold > 0) {
       return tell('Paket yang sudah terjual tidak dapat dihapus.');
@@ -1025,7 +1119,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           </div>
         </div>
         <div className="simulation" style={{marginTop: '15px'}}>
-          <p><i>SOP Pool: Akses kolam TIDAK menggunakan gate. Resepsionis scan QR member -> sistem cek kuota -> cetak wristband MERAH -> potong 1 sesi. Pengantar diberi wristband KUNING (bayar ±Rp10.000 via POS terpisah, bukan dipotong dari kuota ini). Wristband dikembalikan saat scan QR keluar.</i></p>
+          <p><i>SOP Pool: Akses kolam TIDAK menggunakan gate. Resepsionis scan QR member ➔ sistem cek kuota ➔ cetak wristband MERAH ➔ potong 1 sesi. Pengantar diberi wristband KUNING (bayar ±Rp10.000 via POS terpisah, bukan dipotong dari kuota ini). Wristband dikembalikan saat scan QR keluar.</i></p>
         </div>
       </>
     );
