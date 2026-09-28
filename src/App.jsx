@@ -3,7 +3,7 @@ import {
   Activity, Briefcase, Check, ChevronLeft, ChevronRight, DoorOpen, 
   Eye, Filter, Plus, Search, SlidersHorizontal, Trash2, X, Pencil, Cpu, 
   Package as PackageIcon, Dumbbell, Clock, FileText, Layers,
-  ShoppingCart, Users, CalendarCheck
+  ShoppingCart, Users, CalendarCheck, QrCode
 } from 'lucide-react';
 import { read, write, STORAGE, seed, uid, nextCode } from './services/storage';
 import MultiSelect from './components/MultiSelect.jsx';
@@ -109,27 +109,27 @@ const SCHEMA = {
   paket_membership: {
     title: 'Membership', icon: PackageIcon, prefix: 'MB',
     columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['price', 'Harga'], ['activeValue', 'Masa Aktif'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['clubId', 'Club'], ['status', 'Status']]
   },
   paket_kelas: {
     title: 'Paket Kelas', icon: PackageIcon, prefix: 'PK',
     columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['type', 'Tipe Paket'], ['quota', 'Kuota Sesi'], ['price', 'Harga'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['type', 'Tipe Paket'], ['status', 'Status']]
   },
   paket_trainer: {
     title: 'Paket Trainer', icon: PackageIcon, prefix: 'PT',
     columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['sessionType', 'Tipe Sesi'], ['price', 'Harga'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['sessionType', 'Tipe Sesi'], ['status', 'Status']]
   },
   paket_recovery: {
     title: 'Paket Recovery', icon: PackageIcon, prefix: 'PR',
     columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['recoveryType', 'Jenis'], ['roomId', 'Ruangan'], ['quota', 'Kuota Sesi'], ['activeValue', 'Masa Aktif'], ['price', 'Harga'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['clubId', 'Club'], ['recoveryType', 'Jenis'], ['status', 'Status']]
   },
   paket_pool: {
     title: 'Paket Pool', icon: PackageIcon, prefix: 'PL',
     columns: [['code', 'Kode'], ['name', 'Nama Paket'], ['clubId', 'Club'], ['roomId', 'Ruangan'], ['quota', 'Kuota Sesi'], ['reset', 'Reset'], ['activeValue', 'Masa Aktif'], ['price', 'Harga'], ['status', 'Status']],
-    filter: [['code', 'Kode'], ['name', 'Nama'], ['status', 'Status']]
+    filter: [['code', 'Kode'], ['name', 'Nama'], ['clubId', 'Club'], ['status', 'Status']]
   },
   paket_bundling: {
     title: 'Bundling', icon: Layers, prefix: 'BD',
@@ -139,7 +139,7 @@ const SCHEMA = {
   tarif_sewa: {
     title: 'Tarif Sewa', icon: Clock, prefix: 'SW',
     columns: [['roomId', 'Fasilitas'], ['day', 'Hari'], ['timeRange', 'Jam'], ['price', 'Tarif/Jam'], ['overtime', 'Toleransi'], ['status', 'Status']],
-    filter: []
+    filter: [['roomId', 'Fasilitas'], ['day', 'Hari'], ['status', 'Status']]
   },
   log_akses: {
     title: 'Log Akses', icon: FileText, prefix: 'LOG',
@@ -178,9 +178,30 @@ const text = (obj, k) => {
   if (k === 'components') {
     const allPkg = [...ALL('paket_membership'), ...ALL('paket_kelas'), ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')];
     const names = (obj.details || []).map(d => allPkg.find(x => x.id === d.packageId)?.name || 'Unknown');
+    return names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : (names.join(', ') || '—');
+  }
+  if (k === 'member') {
+    const mem = ALL('member').find(m => m.id === obj[k]);
+    return mem ? mem.name : (obj[k] || '—');
+  }
+  if (k === 'items') {
+    const allPkg = [
+      ...ALL('paket_bundling'), ...ALL('paket_membership'), ...ALL('paket_kelas'),
+      ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')
+    ];
+    const names = (obj.details || []).map(d => allPkg.find(x => x.id === d.packageId)?.name).filter(Boolean);
+    if (!names.length) return '—';
     return names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : names.join(', ');
   }
-  if (k === 'activeBalances') return obj.balances ? `${obj.balances.length} Paket` : '0 Paket';
+  if (k === 'timeRange') {
+    const label = obj.peakLabel ? `[${obj.peakLabel}] ` : '';
+    if (obj.startTime && obj.endTime) return `${label}${obj.startTime} - ${obj.endTime}`;
+    return obj.timeRange || '—';
+  }
+  if (k === 'overtime') {
+    return obj.overtime !== undefined && obj.overtime !== '' ? `${obj.overtime} Menit` : '—';
+  }
+  if (k === 'activeBalances') return obj.balances ? `${obj.balances.length} Sesi/Paket Aktif` : '0 Paket';
   if (k === 'playersCount') return obj.players ? `${obj.players.length} Orang` : '0 Orang';
   if (k === 'time') return `${obj.startTime || '00:00'} - ${obj.endTime || '00:00'}`;
   return obj[k] ?? '';
@@ -242,7 +263,7 @@ function DataTable({ columns, rows, onSort, sort, actions, moduleKey }) {
               </td>
               {columns.map(([key]) => (
                 <td key={key}>
-                  {key === 'status' ? <span className={`badge ${row.status === 'Aktif' ? 'green' : 'muted'}`}>{row.status}</span>
+                  {key === 'status' ? <span className={`badge ${row.status === 'Aktif' || row.status === 'Confirmed' || row.status === 'Berhasil' ? 'green' : row.status === 'Pending' ? 'muted' : 'red'}`}>{row.status}</span>
                   : key === 'connection' ? <span className={`badge ${row.connection === 'Online' ? 'green' : 'red'}`}>{row.connection}</span>
                   : key === 'access' ? <ChipOverflow items={row.access} max={2} />
                   : <span className={key === 'code' ? 'code' : ''}>{text(row, key) || '—'}</span>}
@@ -293,6 +314,13 @@ function App() {
       if (!value) return true;
       if (key === 'access') return (item.access || []).some(a => a === value);
       if (key === 'clubId') return item.clubId === value;
+      if (key === 'clubs') return (item.clubs || []).includes(value);
+      if (key === 'roomId') return item.roomId === value;
+      if (key === 'type') return item.type === value;
+      if (key === 'sessionType') return item.sessionType === value;
+      if (key === 'recoveryType') return item.recoveryType === value;
+      if (key === 'holder') return item.holder === value;
+      if (key === 'day') return item.day === value;
       if (key === 'status') return item.status === value;
       return String(text(item, key)).toLowerCase().includes(value.toLowerCase());
     }));
@@ -309,10 +337,38 @@ function App() {
     if (key === 'device') {
       return { id: '', access: [], clubs: [], details: [], readers: [], sold: 0, activeMembers: 0 };
     }
-    return {
+    const base = {
       id: '', status: 'Aktif', connection: 'Offline', access: [], clubs: [], details: [], readers: [],
       sold: 0, activeMembers: 0
     };
+    if (key === 'paket_membership') {
+      return { ...base, roomIds: [], groupClassAccess: 'Tidak Termasuk', isActive: true, activeUnit: 'Bulan', activeValue: 1, bundlingValid: false };
+    }
+    if (key === 'paket_kelas') {
+      return { ...base, type: 'Reguler', classScope: 'Semua Kelas Group', specificClasses: [], activeUnit: 'Hari', activeValue: 30, bundlingValid: true };
+    }
+    if (key === 'paket_trainer') {
+      return { ...base, sessionType: 'Private', activeUnit: 'Bulan', activeValue: 1, tiers: [], bundlingValid: false };
+    }
+    if (key === 'paket_recovery') {
+      return { ...base, reset: 'Tidak Reset', activeUnit: 'Hari', activeValue: 30, bundlingValid: false };
+    }
+    if (key === 'paket_pool') {
+      return { ...base, reset: 'Bulanan', activeUnit: 'Bulan', activeValue: 1, bundlingValid: false };
+    }
+    if (key === 'paket_bundling') {
+      return { ...base, holder: 'Single', priceUnit: 'Per Paket', start: 'Sejak Pembelian', activeUnit: 'Bulan', activeValue: 1, kanalPOS: true, details: [] };
+    }
+    if (key === 'tarif_sewa') {
+      return { ...base, day: 'Senin-Minggu', peakLabel: 'Peak', overtime: 15 };
+    }
+    if (key === 'booking_sewa') {
+      return { ...base, status: 'Confirmed', players: [], approvalTier: '' };
+    }
+    if (key === 'transaksi') {
+      return { ...base, date: new Date().toISOString().split('T')[0], paymentScheme: 'PIF', status: 'Berhasil', details: [] };
+    }
+    return base;
   }
 
   function save(item) {
@@ -388,14 +444,134 @@ function App() {
       delete item._forceSave;
     }
 
+    if (tab === 'paket_membership') {
+      if (!item.name || !item.clubId || !item.roomIds?.length || !item.groupClassAccess || item.price === undefined || item.price === '' || !item.activeValue) {
+        return tell('Nama Paket, Club, Ruangan yang Diakses, Akses Kelas Group, Harga, dan Active Period wajib diisi.');
+      }
+      item.status = item.isActive !== false ? 'Aktif' : 'Nonaktif';
+    }
+
+    if (tab === 'paket_kelas') {
+      if (!item.name || !item.clubId || !item.type || !item.roomId || !item.classScope || !item.quota || item.price === undefined || item.price === '' || !item.activeValue) {
+        return tell('Package Name, Club, Tipe Paket, Ruangan, Cakupan Kelas, Kuota Sesi, Harga, dan Active Period wajib diisi.');
+      }
+      if (item.classScope === 'Kelas Tertentu' && (!item.specificClasses || !item.specificClasses.length)) {
+        return tell('Pilih minimal satu kelas pada Cakupan Kelas Tertentu.');
+      }
+      item.bundlingValid = (item.type === 'Reguler');
+      if (!item.status) item.status = 'Aktif';
+    }
+
+    if (tab === 'paket_trainer') {
+      if (!item.name || !item.clubId || !item.sessionType || !item.session || item.price === undefined || item.price === '' || !item.activeValue) {
+        return tell('Package Name, Club, Tipe Sesi, Total Sesi, Harga Base, dan Active Period wajib diisi.');
+      }
+      if (['Couple', 'Group'].includes(item.sessionType) && !item.holdersCount) {
+        return tell('Jumlah Pemegang Roster wajib diisi untuk tipe Couple / Group.');
+      }
+      if (!item.status) item.status = 'Aktif';
+    }
+
+    if (tab === 'paket_recovery') {
+      if (!item.name || !item.clubId || !item.recoveryType || !item.roomId || !item.quota || !item.reset || !item.activeValue || item.price === undefined || item.price === '') {
+        return tell('Nama Paket, Club, Jenis Recovery, Ruangan, Kuota Sesi, Reset Kuota, Masa Aktif, dan Harga wajib diisi.');
+      }
+      if (!item.status) item.status = 'Aktif';
+    }
+
+    if (tab === 'paket_pool') {
+      if (!item.name || !item.clubId || !item.roomId || !item.quota || !item.reset || !item.activeValue || item.price === undefined || item.price === '') {
+        return tell('Nama Paket, Club, Ruangan (Kolam), Kuota Sesi, Reset Kuota, Masa Aktif, dan Harga wajib diisi.');
+      }
+      if (!item.status) item.status = 'Aktif';
+    }
+
     if (tab === 'paket_bundling') {
+      if (!item.name || !item.clubs?.length || !item.holder || !item.activeValue || !item.start || item.price === undefined || item.price === '' || !item.details?.length) {
+        return tell('Nama Bundling, Club Berlaku, Tipe Pemegang, Masa Aktif, Mulai Aktif, Harga, dan minimal 1 Komponen wajib diisi.');
+      }
+      if (['Couple', 'Group'].includes(item.holder) && !item.holdersCount) {
+        return tell('Jumlah Pemegang wajib diisi untuk Couple / Group.');
+      }
+      if (!item.kanalPOS && !item.kanalApps && !item.kanalB2B) {
+        return tell('Pilih minimal satu Kanal Penjualan (POS / Apps Member / Voucher B2B).');
+      }
+      if (item.details.some(d => !d.packageId)) {
+        return tell('Semua baris komponen wajib memilih paket.');
+      }
       const totalAllocation = (item.details || []).reduce((sum, d) => sum + Number(d.allocation || 0), 0);
-      if (totalAllocation !== Number(item.price)) return tell(`Total alokasi (Rp ${totalAllocation}) tidak sama dengan Harga Bundling (Rp ${item.price})`);
+      if (Math.abs(totalAllocation - Number(item.price)) > 1) {
+        return tell(`Total alokasi (Rp ${Number(totalAllocation).toLocaleString('id-ID')}) tidak sama dengan Harga Bundling (Rp ${Number(item.price).toLocaleString('id-ID')})`);
+      }
+      const allComp = [
+        ...ALL('paket_membership'), ...ALL('paket_kelas'),
+        ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')
+      ];
+      item.details = item.details.map(d => {
+        const found = allComp.find(p => p.id === d.packageId);
+        return {
+          ...d,
+          packageName: found?.name || d.packageName || 'Unknown',
+          originalPrice: found?.price ?? d.originalPrice ?? 0,
+          unitId: found?.unitId || d.unitId || '',
+          pkgType: found?.recoveryType || found?.type || found?.sessionType || 'Paket'
+        };
+      });
+      if (!item.status) item.status = 'Aktif';
+    }
+
+    if (tab === 'tarif_sewa') {
+      if (!item.roomId || !item.day || !item.startTime || !item.endTime || item.price === undefined || item.price === '') {
+        return tell('Fasilitas, Hari, Jam Mulai, Jam Selesai, dan Tarif per Jam wajib diisi.');
+      }
+      if (item.startTime >= item.endTime) {
+        return tell('Jam Mulai harus lebih awal daripada Jam Selesai.');
+      }
+      item.timeRange = `${item.peakLabel ? `[${item.peakLabel}] ` : ''}${item.startTime} - ${item.endTime}`;
+      if (!item.status) item.status = 'Aktif';
     }
 
     if (tab === 'booking_sewa') {
+      if (!item.roomId || !item.date || !item.startTime || !item.endTime || !item.renter) {
+        return tell('Fasilitas, Tanggal, Jam Mulai, Jam Selesai, dan Nama Penyewa wajib diisi.');
+      }
+      if (item.startTime >= item.endTime) {
+        return tell('Jam Mulai harus lebih awal daripada Jam Selesai.');
+      }
       if (item.ayoBookingConflict) {
         return tell('Gagal menyimpan: Slot bentrok dengan jadwal dari Ayo Booking.');
+      }
+      const allBookings = read(STORAGE['booking_sewa']);
+      const collision = allBookings.find(b =>
+        b.id !== item.id &&
+        b.roomId === item.roomId &&
+        b.date === item.date &&
+        b.status !== 'Canceled' &&
+        (
+          (item.startTime >= b.startTime && item.startTime < b.endTime) ||
+          (item.endTime > b.startTime && item.endTime <= b.endTime) ||
+          (item.startTime <= b.startTime && item.endTime >= b.endTime)
+        )
+      );
+      if (collision) {
+        return tell(`Slot bentrok: Fasilitas sudah dibooking pada ${collision.date} (${collision.startTime} - ${collision.endTime}) oleh ${collision.renter}.`);
+      }
+      if (item.players?.length) {
+        item.players = item.players.map((p, idx) => ({
+          ...p,
+          id: p.id || uid(),
+          qrCode: p.qrCode || `QR-${(p.name || `P${idx + 1}`).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${uid().slice(0, 4)}`
+        }));
+      }
+      if (!item.status) item.status = 'Confirmed';
+    }
+
+    if (tab === 'transaksi') {
+      if (!item.date || !item.member || !item.paymentScheme || !item.details?.length) {
+        return tell('Tanggal, Member, Skema Bayar, dan Keranjang Produk wajib diisi.');
+      }
+      if (item.details.some(d => !d.packageId)) {
+        return tell('Semua item di keranjang belanja harus memilih produk.');
       }
     }
 
@@ -516,8 +692,12 @@ function App() {
       const relasi = pm || pt;
       if (relasi) return tell(`[${item.name}] telah berelasi dengan [${relasi.name}], unit bisnis tidak dapat dihapus`);
     }
-    if (tab.startsWith('paket_') && item.sold > 0) {
-      return tell('Paket yang sudah terjual tidak dapat dihapus.');
+    if (tab.startsWith('paket_')) {
+      const hasTransactions = ALL('transaksi').some(t => (t.details || []).some(d => d.packageId === item.id));
+      const hasMemberBalances = ALL('member').some(m => (m.balances || []).some(b => b.packageId === item.id || b.sourceBundling === item.id));
+      if (item.sold > 0 || hasTransactions || hasMemberBalances) {
+        return tell('Paket yang sudah terjual tidak dapat dihapus.');
+      }
     }
 
     setModal({
@@ -737,7 +917,7 @@ function App() {
       </main>
       
       {editor && <Editor module={tab} item={editor.item} onClose={() => setEditor(null)} onSave={save} tell={tell} setModal={setModal} />}
-      {modal && <Modal value={modal} module={tab} close={() => setModal(null)} />}
+      {modal && <Modal value={modal} module={tab} close={() => setModal(null)} tell={tell} load={load} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
@@ -781,7 +961,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
             />
           </div>
         ) : (
-          <input disabled={disabled} type={type === 'number' ? 'number' : 'text'} value={v[key] ?? ''} onChange={e => upd(key, e.target.value)} />
+          <input disabled={disabled} type={type === 'number' ? 'number' : type === 'date' ? 'date' : type === 'time' ? 'time' : 'text'} value={v[key] ?? ''} onChange={e => upd(key, e.target.value)} />
         )}
       </label>
     );
@@ -911,7 +1091,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       <div className="form-grid">
         {/* Field Lama Tetap */}
         {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
-        {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+        {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
         {field('promo', 'Promo', 'text')}
         {field('paymentType', 'Payment Type', 'select', [['PIF', 'PIF'], ['Recurring', 'Recurring']])}
         {field('shift', 'Shift', 'select', [['All Day', 'All Day'], ['Morning', 'Morning'], ['Evening', 'Evening']])}
@@ -950,7 +1130,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       <div className="form-grid">
         {/* Field Lama */}
         {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
-        {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+        {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
         {field('name', 'Package Name', 'text', [], true)}
         {field('icon', 'Icon', 'text')}
         
@@ -977,7 +1157,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
 
         <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
           {field('quota', 'Kuota Sesi', 'number', [], true)}
-          {field('price', 'Harga (Rp)', 'number', [], true)}
+          {field('price', 'Harga (Rp)', 'currency', [], true)}
         </div>
         
         <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
@@ -992,13 +1172,13 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
         <div className="form-grid">
           {/* Field Lama */}
           {field('brand', 'Brand', 'select', [['Semua Brand', 'Semua Brand'], ['Brand A', 'Brand A']])}
-          {field('club', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
+          {field('clubId', 'Club', 'select', clubs.map(c => [c.id, c.name]))}
           {field('trainer', 'Trainer/Employee', 'select', [['Semua Trainer', 'Semua Trainer'], ['T-01 - Budi', 'T-01 - Budi']])}
           {field('name', 'Package Name', 'text', [], true)}
           
           <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
             {field('session', 'Session (Total)', 'number', [], true)}
-            {field('price', 'Harga Base (Rp)', 'number', [], true)}
+            {field('price', 'Harga Base (Rp)', 'currency', [], true)}
           </div>
           
           <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
@@ -1008,6 +1188,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
 
           <div className="span-two" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '10px' }}>
             {field('onMobile', 'On Mobile', 'check')}
+            {field('bundlingValid', 'Bisa Masuk Bundling', 'check')}
           </div>
 
           <hr className="span-two" />
@@ -1031,7 +1212,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
         {['Couple', 'Group'].includes(v.sessionType) && (
           <>
             <div className="sub-heading">
-              <h3>Tabel Tier Harga & Komisi Trainer</h3>
+              <h3>Tabel Tier Harga &amp; Komisi Trainer</h3>
               <button type="button" className="secondary" onClick={() => upd('tiers', [...(v.tiers || []), { id: uid(), holders: 2, price: 0, commission: 0 }])}><Plus size={14} />Tambah Tier</button>
             </div>
             <div className="table-scroll" style={{border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
@@ -1048,8 +1229,18 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                   {(v.tiers || []).map((t, i) => (
                     <tr key={t.id}>
                       <td><input type="number" value={t.holders} onChange={e => { const n=[...v.tiers]; n[i].holders=Number(e.target.value); upd('tiers', n); }} style={{width: '100px', margin: 0}} /></td>
-                      <td><input type="number" value={t.price} onChange={e => { const n=[...v.tiers]; n[i].price=Number(e.target.value); upd('tiers', n); }} style={{width: '100%', margin: 0}} /></td>
-                      <td><input type="number" value={t.commission} onChange={e => { const n=[...v.tiers]; n[i].commission=Number(e.target.value); upd('tiers', n); }} style={{width: '100%', margin: 0}} /></td>
+                      <td>
+                        <div className="currency-wrapper" style={{minHeight: '32px'}}>
+                          <span className="prefix" style={{padding: '0 8px', fontSize: '12px'}}>Rp</span>
+                          <input type="text" value={t.price ? t.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.tiers]; n[i].price=raw?Number(raw):0; upd('tiers', n); }} style={{border:'none',boxShadow:'none',outline:'none',minHeight:0,padding:'0 8px'}} />
+                        </div>
+                      </td>
+                      <td>
+                        <div className="currency-wrapper" style={{minHeight: '32px'}}>
+                          <span className="prefix" style={{padding: '0 8px', fontSize: '12px'}}>Rp</span>
+                          <input type="text" value={t.commission ? t.commission.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : ''} onChange={e => { const raw=e.target.value.replace(/\D/g,''); const n=[...v.tiers]; n[i].commission=raw?Number(raw):0; upd('tiers', n); }} style={{border:'none',boxShadow:'none',outline:'none',minHeight:0,padding:'0 8px'}} />
+                        </div>
+                      </td>
                       <td style={{textAlign: 'center'}}><button type="button" className="delete-action" onClick={() => upd('tiers', v.tiers.filter((_, idx) => idx !== i))} style={{padding: '5px'}}><Trash2 size={15} /></button></td>
                     </tr>
                   ))}
@@ -1077,7 +1268,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           </div>
           
           <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
-            {field('price', 'Harga (Rp)', 'number', [], true)}
+            {field('price', 'Harga (Rp)', 'currency', [], true)}
             <div style={{display: 'flex', gap: '10px'}}>
               {field('activeValue', 'Masa Aktif', 'number', [], true)}
               {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
@@ -1107,7 +1298,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           </div>
           
           <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
-            {field('price', 'Harga (Rp)', 'number', [], true)}
+            {field('price', 'Harga (Rp)', 'currency', [], true)}
             <div style={{display: 'flex', gap: '10px'}}>
               {field('activeValue', 'Masa Aktif', 'number', [], true)}
               {field('activeUnit', 'Satuan', 'select', [['Hari', 'Hari'], ['Bulan', 'Bulan']])}
@@ -1130,18 +1321,24 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       ...ALL('paket_trainer').map(x => ({...x, _mod: 'paket_trainer'})),
       ...ALL('paket_recovery').map(x => ({...x, _mod: 'paket_recovery'})),
       ...ALL('paket_pool').map(x => ({...x, _mod: 'paket_pool'}))
-    ].filter(p => p.bundlingValid && p.status === 'Aktif' && (p.type !== 'Add-on'));
+    ].filter(p => {
+      if (p.status !== 'Aktif') return false;
+      if (p.type === 'Add-on') return false;
+      if (p._mod === 'paket_kelas') return p.type === 'Reguler';
+      return !!p.bundlingValid;
+    });
 
     const getPkg = (id) => allPkg.find(x => x.id === id) || {};
 
-    const recalcProportional = (details) => {
-      if (!v.price || !details?.length) return details;
-      const totalOrigin = details.reduce((acc, d) => acc + (getPkg(d.packageId).price || 0), 0);
+    const recalcProportional = (details, customPrice = null) => {
+      const targetPrice = customPrice !== null ? customPrice : Number(v.price || 0);
+      if (!targetPrice || !details?.length) return details;
+      const totalOrigin = details.reduce((acc, d) => acc + (Number(getPkg(d.packageId).price) || 0), 0);
       if (totalOrigin === 0) return details;
       let used = 0;
       const res = details.map((d, i) => {
-        if (i === details.length - 1) return { ...d, allocation: Number(v.price) - used };
-        const prop = Math.round(((getPkg(d.packageId).price || 0) / totalOrigin) * Number(v.price));
+        if (i === details.length - 1) return { ...d, allocation: targetPrice - used };
+        const prop = Math.round(((Number(getPkg(d.packageId).price) || 0) / totalOrigin) * targetPrice);
         used += prop;
         return { ...d, allocation: prop };
       });
@@ -1186,8 +1383,8 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
           </div>
 
           <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
-            {field('promoStart', 'Periode Promo Mulai', 'text')}
-            {field('promoEnd', 'Periode Promo Selesai', 'text')}
+            {field('promoStart', 'Periode Promo Mulai', 'date')}
+            {field('promoEnd', 'Periode Promo Selesai', 'date')}
           </div>
 
           <label className="span-two">
@@ -1202,7 +1399,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                   const newPrice = raw ? Number(raw) : '';
                   setV(prev => {
                     const updated = {...prev, price: newPrice};
-                    updated.details = recalcProportional(updated.details);
+                    updated.details = recalcProportional(updated.details, newPrice);
                     return updated;
                   });
                 }} 
@@ -1240,11 +1437,11 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                   upd('details', recalcProportional(n)); 
                 }}>
                   <option value="">-- Pilih Paket --</option>
-                  {allPkg.map(x => <option key={x.id} value={x.id}>{x.name} (Rp {x.price})</option>)}
+                  {allPkg.map(x => <option key={x.id} value={x.id}>{x.name} (Rp {Number(x.price || 0).toLocaleString('id-ID')})</option>)}
                 </select></label>
                 
                 <label>Unit Bisnis <input readOnly value={unit?.name || '—'} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
-                <label>Harga Asal <input readOnly value={pkg.price || 0} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
+                <label>Harga Asal <input readOnly value={`Rp ${Number(pkg.price || 0).toLocaleString('id-ID')}`} style={{background: '#f9fafb', color: '#6b7280'}} /></label>
                 <label className="span-two">Alokasi Harga (Rp) <input type="number" value={d.allocation} onChange={e => { const n=[...v.details]; n[i].allocation=Number(e.target.value); upd('details', n); }}/></label>
                 
                 <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => {
@@ -1262,7 +1459,11 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       <div className="form-grid">
         {field('roomId', 'Fasilitas', 'select', rooms.map(r => [r.id, r.name]), true)}
         {field('day', 'Hari', 'select', [['Senin-Minggu', 'Senin-Minggu'], ['Weekday', 'Weekday'], ['Weekend', 'Weekend']], true)}
-        {field('timeRange', 'Jam Peak/Off-Peak', 'text', [], true)}
+        {field('peakLabel', 'Label Peak/Off-Peak', 'select', [['Peak', 'Peak'], ['Off-Peak', 'Off-Peak']], true)}
+        <div className="span-two form-grid" style={{gap: '14px 17px', margin: 0}}>
+          {field('startTime', 'Jam Mulai', 'time', [], true)}
+          {field('endTime', 'Jam Selesai', 'time', [], true)}
+        </div>
         {field('price', 'Tarif per Jam', 'currency', [], true)}
         {field('overtime', 'Toleransi Overtime (menit)', 'number')}
         {field('status', 'Status', 'select', STATUS.map(x => [x, x]), true)}
@@ -1270,6 +1471,12 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
     );
   } else if (m === 'transaksi') {
     const members = ALL('member');
+    const selectedMember = members.find(m => m.id === v.member);
+    const hasActivePlan = selectedMember?.balances && selectedMember.balances.some(b => {
+      if (b.qty === 0 || b.qty === '0') return false;
+      if (b.expiry && new Date(b.expiry) < new Date(new Date().toDateString())) return false;
+      return true;
+    });
     
     // Combine all products for POS simulation
     const allPkg = [
@@ -1279,22 +1486,44 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       ...ALL('paket_trainer').map(x => ({...x, _type: 'Paket Trainer'})),
       ...ALL('paket_recovery').map(x => ({...x, _type: 'Paket Recovery'})),
       ...ALL('paket_pool').map(x => ({...x, _type: 'Paket Pool'}))
-    ].filter(p => p.status === 'Aktif');
+    ].filter(p => {
+      if (p.status !== 'Aktif') return false;
+      // Rule: Add-on tidak muncul di POS jika member belum punya paket aktif
+      if (p.type === 'Add-on' && !hasActivePlan) return false;
+      // Rule: Jika salah satu komponen bundling nonaktif, bundling tidak bisa dijual baru
+      if (p._type === 'Bundling') {
+        const allActivePackages = [
+          ...ALL('paket_membership'), ...ALL('paket_kelas'),
+          ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')
+        ].filter(x => x.status === 'Aktif');
+        const hasInactiveComp = (p.details || []).some(d => !allActivePackages.some(ap => ap.id === d.packageId));
+        if (hasInactiveComp) return false;
+      }
+      return true;
+    });
 
     const getPkg = (id) => allPkg.find(x => x.id === id) || {};
+
+    const updateCartDetails = (newDetails) => {
+      const calcTotal = newDetails.reduce((sum, d) => {
+        const p = getPkg(d.packageId);
+        return sum + (Number(p.price) || 0);
+      }, 0);
+      setV(prev => ({ ...prev, details: newDetails, total: calcTotal }));
+    };
 
     body = (
       <>
         <div className="form-grid">
-          {field('date', 'Tanggal Transaksi', 'text', [], true)}
+          {field('date', 'Tanggal Transaksi', 'date', [], true)}
           {field('member', 'Member Utama (Pembayar)', 'select', members.map(m => [m.id, m.name]), true)}
           {field('paymentScheme', 'Skema Bayar', 'select', [['PIF', 'Paid In Full (PIF)'], ['DP', 'DP'], ['Cicilan', 'Cicilan'], ['Open Credit', 'Open Credit'], ['Free Trial', 'Free Trial']], true)}
-          {field('total', 'Total Harga (Rp)', 'number', [], true)}
+          {field('total', 'Total Harga (Rp)', 'currency', [], true)}
           {field('status', 'Status', 'select', [['Berhasil', 'Berhasil'], ['Pending', 'Pending']], true)}
         </div>
         <div className="sub-heading">
           <h3>Keranjang Belanja (Produk)</h3>
-          <button type="button" className="secondary" onClick={() => upd('details', [...(v.details || []), { id: uid(), packageId: '', roster: [] }])}><Plus size={14} />Tambah Produk</button>
+          <button type="button" className="secondary" onClick={() => updateCartDetails([...(v.details || []), { id: uid(), packageId: '', roster: [] }])}><Plus size={14} />Tambah Produk</button>
         </div>
         {(v.details || []).map((d, i) => {
           const pkg = getPkg(d.packageId);
@@ -1307,10 +1536,10 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                     const n=[...v.details]; 
                     n[i].packageId=e.target.value; 
                     if (!e.target.value) n[i].roster = [];
-                    upd('details', n); 
+                    updateCartDetails(n); 
                   }}>
                     <option value="">-- Pilih Produk --</option>
-                    {allPkg.map(x => <option key={x.id} value={x.id}>[{x._type}] {x.name} - Rp {x.price || 0}</option>)}
+                    {allPkg.map(x => <option key={x.id} value={x.id}>[{x._type}] {x.name} - Rp {Number(x.price || 0).toLocaleString('id-ID')}</option>)}
                   </select>
                 </label>
                 
@@ -1341,7 +1570,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
                   </div>
                 )}
                 
-                <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => upd('details', v.details.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button>
+                <button type="button" className="delete-action" style={{position: 'absolute', top: '15px', right: '15px'}} onClick={() => updateCartDetails(v.details.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button>
               </div>
             </div>
           );
@@ -1363,9 +1592,9 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
       <>
         <div className="form-grid">
           {field('roomId', 'Fasilitas (Lapangan)', 'select', rooms.map(r => [r.id, r.name]), true)}
-          {field('date', 'Tanggal Booking', 'text', [], true)}
-          {field('startTime', 'Jam Mulai', 'text', [], true)}
-          {field('endTime', 'Jam Selesai', 'text', [], true)}
+          {field('date', 'Tanggal Booking', 'date', [], true)}
+          {field('startTime', 'Jam Mulai', 'time', [], true)}
+          {field('endTime', 'Jam Selesai', 'time', [], true)}
           {field('renter', 'Nama Penyewa', 'text', [], true)}
           {field('status', 'Status', 'select', [['Confirmed', 'Confirmed'], ['Pending', 'Pending'], ['Canceled', 'Canceled']], true)}
         </div>
@@ -1418,7 +1647,7 @@ function Editor({ module: m, item, onClose, onSave, tell, setModal }) {
   );
 }
 
-function Modal({ value: m, module, close }) {
+function Modal({ value: m, module, close, tell, load }) {
   if (m.type === 'view') {
     const item = m.item;
     return (
@@ -1459,13 +1688,228 @@ function Modal({ value: m, module, close }) {
                     <b>{b.name} ({b.type})</b>
                     <span>Exp: {b.expiry}</span>
                   </div>
-                  <div>Sisa: {b.qty}</div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px'}}>
+                    <span>Sisa: <b>{b.qty}</b></span>
+                    <small style={{color: '#6B7280'}}>{b.sourceBundling ? 'Dari Bundling' : 'Paket Satuan'}</small>
+                  </div>
                 </div>
               ))}
+              {!(item.balances || []).length && (
+                <div style={{padding: '12px', textAlign: 'center', color: '#9CA3AF'}}>Belum ada saldo aktif</div>
+              )}
               <div className="sub-heading"><h3>Aksi Saldo</h3></div>
               <div style={{display: 'flex', gap: '10px', marginBottom: '15px'}}>
-                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Saldo ditarik dari batch-nya sendiri, tidak mengganggu saldo lama member.')}>Void / Refund</button>
-                <button className="secondary" style={{flex: 1}} onClick={() => alert('Simulasi: Transfer/upgrade memperlakukan bundling sebagai satu unit.')}>Transfer / Upgrade</button>
+                <button className="secondary" style={{flex: 1}} onClick={() => {
+                  if (!item.balances?.length) return tell?.('Member tidak memiliki saldo untuk di-void.');
+                  const latest = item.balances[item.balances.length - 1];
+                  const remaining = item.balances.slice(0, -1);
+                  const mems = read(STORAGE['member']).map(x => x.id === item.id ? { ...x, balances: remaining } : x);
+                  write(STORAGE['member'], mems);
+                  if (latest.transactionId) {
+                    const trxs = read(STORAGE['transaksi']).map(t => t.id === latest.transactionId ? { ...t, status: 'Void / Refund' } : t);
+                    write(STORAGE['transaksi'], trxs);
+                  }
+                  load?.();
+                  close();
+                  tell?.(`Saldo batch [${latest.name}] berhasil ditarik/void tanpa mengganggu saldo lama.`);
+                }}>Void / Refund Batch Terbaru</button>
+                <button className="secondary" style={{flex: 1}} onClick={() => tell?.('Simulasi: Transfer/Upgrade bundling diproses sebagai satu unit utuh.')}>Transfer / Upgrade</button>
+              </div>
+            </>
+          )}
+
+          {module === 'paket_membership' && (
+            <>
+              <div className="sub-heading"><h3>Ruangan yang Diakses</h3></div>
+              <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '15px'}}>
+                {(item.roomIds || []).map(rId => {
+                  const r = ALL('ruangan').find(x => x.id === rId);
+                  return <span key={rId} className="chip">{r?.name || rId}</span>;
+                })}
+                {!(item.roomIds || []).length && <span style={{color: '#999'}}>Tidak ada ruangan terkait</span>}
+              </div>
+            </>
+          )}
+
+          {module === 'paket_kelas' && (
+            <>
+              <div className="sub-heading"><h3>Detail Cakupan &amp; Ruangan</h3></div>
+              <div className="view-grid" style={{marginTop: 0, paddingTop: 0}}>
+                <div>
+                  <small>Studio Ruangan</small>
+                  <b>{ALL('ruangan').find(x => x.id === item.roomId)?.name || '—'}</b>
+                </div>
+                <div>
+                  <small>Cakupan Kelas</small>
+                  <b>{item.classScope || '—'}</b>
+                </div>
+                {item.classScope === 'Kelas Tertentu' && item.specificClasses?.length > 0 && (
+                  <div className="span-two">
+                    <small>Kelas Terpilih</small>
+                    <div style={{display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px'}}>
+                      {item.specificClasses.map(c => <span key={c} className="chip">{c}</span>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {module === 'paket_trainer' && item.tiers?.length > 0 && (
+            <>
+              <div className="sub-heading"><h3>Tabel Tier Harga &amp; Komisi Trainer</h3></div>
+              <div className="table-scroll" style={{maxHeight: '150px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Jml Pemegang</th>
+                      <th>Harga Paket</th>
+                      <th>Komisi Trainer per Sesi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {item.tiers.map((t, i) => (
+                      <tr key={i}>
+                        <td>{t.holders} Orang</td>
+                        <td>Rp {Number(t.price || 0).toLocaleString('id-ID')}</td>
+                        <td>Rp {Number(t.commission || 0).toLocaleString('id-ID')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {module === 'paket_bundling' && (
+            <>
+              <div className="sub-heading"><h3>Daftar Komponen &amp; Alokasi Harga</h3></div>
+              <div className="table-scroll" style={{maxHeight: '200px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr>
+                      <th>Nama Komponen</th>
+                      <th>Tipe</th>
+                      <th>Unit Bisnis</th>
+                      <th>Harga Asal</th>
+                      <th>Alokasi Harga</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(item.details || []).map((d, i) => {
+                      const allComp = [
+                        ...ALL('paket_membership'), ...ALL('paket_kelas'),
+                        ...ALL('paket_trainer'), ...ALL('paket_recovery'), ...ALL('paket_pool')
+                      ];
+                      const found = allComp.find(p => p.id === d.packageId);
+                      const unit = ALL('unit').find(u => u.id === (found?.unitId || d.unitId));
+                      return (
+                        <tr key={i}>
+                          <td><b>{found?.name || d.packageName || 'Unknown'}</b></td>
+                          <td>{found?._type || d.pkgType || 'Paket'}</td>
+                          <td>{unit?.name || '—'}</td>
+                          <td>Rp {Number(found?.price ?? d.originalPrice ?? 0).toLocaleString('id-ID')}</td>
+                          <td><b>Rp {Number(d.allocation || 0).toLocaleString('id-ID')}</b></td>
+                        </tr>
+                      );
+                    })}
+                    {!(item.details || []).length && <tr><td colSpan="5" style={{textAlign: 'center', color: '#999'}}>Tidak ada komponen</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#F8FAFC', borderRadius: '6px', fontSize: '13px', fontWeight: 'bold'}}>
+                <span>Total Alokasi:</span>
+                <span>Rp {((item.details || []).reduce((sum, d) => sum + Number(d.allocation || 0), 0)).toLocaleString('id-ID')}</span>
+              </div>
+            </>
+          )}
+
+          {module === 'booking_sewa' && (
+            <>
+              <div className="sub-heading"><h3>Daftar Pemain &amp; QR Akses</h3></div>
+              <div className="table-scroll" style={{maxHeight: '180px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr>
+                      <th>No</th>
+                      <th>Nama Pemain</th>
+                      <th>Kode QR Akses</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(item.players || []).map((p, i) => (
+                      <tr key={i}>
+                        <td>{i + 1}</td>
+                        <td><b>{p.name || `Pemain ${i + 1}`}</b></td>
+                        <td>
+                          <span className="code" style={{display: 'inline-flex', alignItems: 'center', gap: '6px'}}>
+                            <QrCode size={13} /> {p.qrCode || `QR-${(p.name || `P${i + 1}`).toUpperCase().replace(/[^A-Z0-9]/g, '')}-${item.id?.slice(0, 4) || 'ACC'}`}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {!(item.players || []).length && (
+                      <tr>
+                        <td>1</td>
+                        <td><b>{item.renter} (Penyewa Utama)</b></td>
+                        <td>
+                          <span className="code" style={{display: 'inline-flex', alignItems: 'center', gap: '6px'}}>
+                            <QrCode size={13} /> {`QR-${item.renter?.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'RENTER'}-VIP`}
+                          </span>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="sub-heading"><h3>Status Kontingensi &amp; SOP Terpusat</h3></div>
+              <div className="view-grid" style={{marginTop: 0, paddingTop: 0}}>
+                <div>
+                  <small>Kontingensi Gateway</small>
+                  <b>{item.approvalTier === 'tier2' ? 'Tier 2: Scan Apps Staff (Approved CS)' : item.approvalTier === 'tier3' ? 'Tier 3: Superuser Backdate CRM' : 'Tier 1: Otomatis Hardware (QR / Face ID)'}</b>
+                </div>
+                <div>
+                  <small>Sinkronisasi Ayo Booking</small>
+                  <b>{item.ayoBookingConflict ? '⚠️ Bentrok Terdeteksi' : '✅ Sinkron 2-Arah Aktif'}</b>
+                </div>
+              </div>
+            </>
+          )}
+
+          {module === 'transaksi' && (
+            <>
+              <div className="sub-heading"><h3>Rincian Produk Belanja</h3></div>
+              <div className="table-scroll" style={{maxHeight: '180px', border: '1px solid #edf0f0', borderRadius: '6px', marginBottom: '15px'}}>
+                <table>
+                  <thead style={{position: 'sticky', top: 0, zIndex: 1}}>
+                    <tr>
+                      <th>Produk</th>
+                      <th>Tipe</th>
+                      <th>Roster Anggota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(item.details || []).map((d, i) => {
+                      const allPkg = [
+                        ...ALL('paket_bundling').map(x => ({...x, _type: 'Bundling'})),
+                        ...ALL('paket_membership').map(x => ({...x, _type: 'Paket Membership'})),
+                        ...ALL('paket_kelas').map(x => ({...x, _type: 'Paket Kelas'})),
+                        ...ALL('paket_trainer').map(x => ({...x, _type: 'Paket Trainer'})),
+                        ...ALL('paket_recovery').map(x => ({...x, _type: 'Paket Recovery'})),
+                        ...ALL('paket_pool').map(x => ({...x, _type: 'Paket Pool'}))
+                      ];
+                      const pkg = allPkg.find(p => p.id === d.packageId);
+                      const rosterNames = (d.roster || []).map(r => r.name).filter(Boolean).join(', ');
+                      return (
+                        <tr key={i}>
+                          <td><b>{pkg?.name || 'Produk'}</b></td>
+                          <td>{pkg?._type || '—'}</td>
+                          <td>{rosterNames || 'Individu'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </>
           )}
